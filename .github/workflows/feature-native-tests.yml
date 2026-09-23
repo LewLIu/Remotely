@@ -17,9 +17,34 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Shared tests
+      - name: Run tests
+        id: tests
         shell: pwsh
-        run: dotnet test Tests/Shared.Tests/Shared.Tests.csproj -c Release --no-restore:$false
-      - name: Desktop Windows tests
+        continue-on-error: true
+        run: |
+          New-Item -ItemType Directory -Force -Path test-results | Out-Null
+          $failed = $false
+
+          dotnet test Tests/Shared.Tests/Shared.Tests.csproj -c Release *>&1 | Tee-Object -FilePath test-results/shared.log
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+
+          dotnet test Tests/Desktop.Win.Tests/Desktop.Win.Tests.csproj -c Release *>&1 | Tee-Object -FilePath test-results/desktop-win.log
+          if ($LASTEXITCODE -ne 0) { $failed = $true }
+
+          if (Test-Path Tests/Manager.Win.Tests/Manager.Win.Tests.csproj) {
+            dotnet test Tests/Manager.Win.Tests/Manager.Win.Tests.csproj -c Release *>&1 | Tee-Object -FilePath test-results/manager-win.log
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+
+          if ($failed) { exit 1 }
+      - name: Upload test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-test-logs-${{ github.run_number }}
+          path: test-results/*.log
+          if-no-files-found: error
+      - name: Fail workflow when tests failed
+        if: steps.tests.outcome == 'failure'
         shell: pwsh
-        run: dotnet test Tests/Desktop.Win.Tests/Desktop.Win.Tests.csproj -c Release --no-restore:$false
+        run: exit 1
