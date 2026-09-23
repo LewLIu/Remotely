@@ -1,3 +1,4 @@
+using System.IO;
 using Remotely.Desktop.Shared.Abstractions;
 using Remotely.Shared.Models;
 using Remotely.Shared.Services;
