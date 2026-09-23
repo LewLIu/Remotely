@@ -21,10 +21,12 @@ internal class ScreenCaster : IScreenCaster
 {
     private readonly IAppState _appState;
     private readonly ICursorIconWatcher _cursorIconWatcher;
+    private readonly FrameRateGate _frameRateGate;
     private readonly IImageHelper _imageHelper;
     private readonly ILogger<ScreenCaster> _logger;
     private readonly CancellationTokenSource _metricsCts = new();
     private readonly RecyclableMemoryStreamManager _recycleStreams = new();
+    private readonly IRemoteStreamSettingsProvider _streamSettingsProvider;
     private readonly ISessionIndicator _sessionIndicator;
     private readonly IShutdownService _shutdownService;
     private readonly ISystemTime _systemTime;
@@ -40,6 +42,8 @@ internal class ScreenCaster : IScreenCaster
         IShutdownService shutdownService,
         IImageHelper imageHelper,
         ISystemTime systemTime,
+        IRemoteStreamSettingsProvider streamSettingsProvider,
+        FrameRateGate frameRateGate,
         IMessenger messenger,
         ILogger<ScreenCaster> logger)
     {
@@ -49,6 +53,8 @@ internal class ScreenCaster : IScreenCaster
         _shutdownService = shutdownService;
         _imageHelper = imageHelper;
         _systemTime = systemTime;
+        _streamSettingsProvider = streamSettingsProvider;
+        _frameRateGate = frameRateGate;
         _viewerFactory = viewerFactory;
         _logger = logger;
 
@@ -172,8 +178,6 @@ internal class ScreenCaster : IScreenCaster
         {
             while (!viewer.DisconnectRequested && viewer.IsResponsive && !_isWindowsSessionEnding)
             {
-                viewer.IncrementFpsCount();
-
                 await viewer.ApplyAutoQuality();
 
                 if (!await viewer.WaitForViewer())
@@ -181,6 +185,8 @@ internal class ScreenCaster : IScreenCaster
                     _logger.LogWarning(
                         "Viewer is behind on frames and did not catch up in time.");
                 }
+
+                await _frameRateGate.WaitAsync(_streamSettingsProvider.Current.MaxFps);
 
                 var result = viewer.Capturer.GetNextFrame();
 
@@ -209,6 +215,7 @@ internal class ScreenCaster : IScreenCaster
                     continue;
                 }
 
+                viewer.IncrementFpsCount();
                 viewer.AppendSentFrame(new SentFrame(encodedImageBytes.Length, _systemTime.Now));
 
                 using var frameStream = _recycleStreams.GetStream();
