@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="ManualTests.cs" />
     <None Remove="Resources\Image1.jpg" />
     <None Remove="Resources\Image2.jpg" />
   </ItemGroup>
