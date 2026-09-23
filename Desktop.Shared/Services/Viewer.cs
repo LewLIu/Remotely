@@ -8,6 +8,7 @@ using Remotely.Desktop.Shared.ViewModels;
 using Microsoft.AspNetCore.SignalR.Client;
 using Remotely.Shared.Services;
 using Remotely.Desktop.Native.Windows;
+using Remotely.Shared.Enums;
 
 namespace Remotely.Desktop.Shared.Services;
 
@@ -50,6 +51,7 @@ public class Viewer : IViewer
     private readonly IDesktopHubConnection _desktopHubConnection;
     private readonly ConcurrentQueue<DateTimeOffset> _fpsQueue = new();
     private readonly ILogger<Viewer> _logger;
+    private readonly IRemoteStreamSettingsProvider _streamSettingsProvider;
     private readonly ConcurrentQueue<SentFrame> _sentFrames = new();
     private readonly ISystemTime _systemTime;
     private bool _disconnectRequested;
@@ -66,6 +68,7 @@ public class Viewer : IViewer
         IClipboardService clipboardService,
         IAudioCapturer audioCapturer,
         ISystemTime systemTime,
+        IRemoteStreamSettingsProvider streamSettingsProvider,
         ILogger<Viewer> logger)
     {
         Name = requesterName;
@@ -75,10 +78,13 @@ public class Viewer : IViewer
         _clipboardService = clipboardService;
         _audioCapturer = audioCapturer;
         _systemTime = systemTime;
+        _streamSettingsProvider = streamSettingsProvider;
         _logger = logger;
 
         _clipboardService.ClipboardTextChanged += ClipboardService_ClipboardTextChanged;
         _audioCapturer.AudioSampleReady += AudioCapturer_AudioSampleReady;
+        _streamSettingsProvider.SettingsChanged += StreamSettingsProvider_SettingsChanged;
+        ApplyStreamSettings(_streamSettingsProvider.Current);
     }
 
     public IScreenCapturer Capturer { get; }
@@ -108,7 +114,18 @@ public class Viewer : IViewer
 
     public Task ApplyAutoQuality()
     {
-        if (ImageQuality < DefaultQuality)
+        var settings = _streamSettingsProvider.Current;
+        if (settings.Profile != RemoteStreamProfile.Original)
+        {
+            ImageQuality = settings.ImageQuality;
+            return Task.CompletedTask;
+        }
+
+        if (ImageQuality > DefaultQuality)
+        {
+            ImageQuality = DefaultQuality;
+        }
+        else if (ImageQuality < DefaultQuality)
         {
             ImageQuality = Math.Min(DefaultQuality, ImageQuality + 2);
         }
@@ -130,6 +147,7 @@ public class Viewer : IViewer
     public void Dispose()
     {
         DisconnectRequested = true;
+        _streamSettingsProvider.SettingsChanged -= StreamSettingsProvider_SettingsChanged;
         Disposer.TryDisposeAll(Capturer);
         GC.SuppressFinalize(this);
     }
@@ -285,6 +303,20 @@ public class Viewer : IViewer
         return result;
     }
 
+    private void ApplyStreamSettings(RemoteStreamSettings settings)
+    {
+        if (settings.Profile == RemoteStreamProfile.Original)
+        {
+            if (ImageQuality > DefaultQuality)
+            {
+                ImageQuality = DefaultQuality;
+            }
+            return;
+        }
+
+        ImageQuality = settings.ImageQuality;
+    }
+
     private async void AudioCapturer_AudioSampleReady(object? sender, byte[] sample)
     {
         await SendAudioSample(sample);
@@ -345,6 +377,11 @@ public class Viewer : IViewer
     private async void ClipboardService_ClipboardTextChanged(object? sender, string clipboardText)
     {
         await SendClipboardText(clipboardText);
+    }
+
+    private void StreamSettingsProvider_SettingsChanged(object? sender, RemoteStreamSettings settings)
+    {
+        ApplyStreamSettings(settings);
     }
 
     private async Task TrySendToViewer<T>(T dto, DtoType type, string viewerConnectionId)
