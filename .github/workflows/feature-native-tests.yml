@@ -6,6 +6,10 @@ on:
       - feature/emergency-manager-low-bandwidth
   workflow_dispatch:
 
+concurrency:
+  group: feature-native-tests
+  cancel-in-progress: true
+
 jobs:
   tests:
     runs-on: windows-latest
