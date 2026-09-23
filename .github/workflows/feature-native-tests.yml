@@ -1,0 +1,25 @@
+name: Feature Native Tests
+
+on:
+  push:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+  workflow_dispatch:
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Shared tests
+        shell: pwsh
+        run: dotnet test Tests/Shared.Tests/Shared.Tests.csproj -c Release --no-restore:$false
+      - name: Desktop Windows tests
+        shell: pwsh
+        run: dotnet test Tests/Desktop.Win.Tests/Desktop.Win.Tests.csproj -c Release --no-restore:$false
