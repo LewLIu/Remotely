@@ -111,18 +111,20 @@ Start/Stop actions should be disabled when they do not make sense for the curren
 
 ### 5.3 Exit semantics
 
-`Exit` means "disable remote access and exit manager":
+`Exit` means "stop the Resident Agent service and exit manager":
 
 1. Stop `Remotely_Service` if it is running.
 2. Wait for `Stopped` up to a bounded timeout.
 3. Exit the tray process only after stop succeeds.
 4. If stop fails, show an error and keep the tray manager alive rather than silently leaving the service running.
 
+Stopping `Remotely_Service` prevents the Resident Agent from accepting new server requests. This V1 design does **not** promise to forcibly terminate an already-running `Remotely_Desktop` process or an already-established remote session; if testing shows that this is required for the desired UX, it must be treated as an explicit follow-up behavior rather than assumed from service stop.
+
 During Windows logoff/shutdown, perform best-effort service stop. Because the service startup type is Manual, it must not automatically restart at the next boot.
 
 ### 5.4 Single-instance behavior
 
-Only one manager instance should run per interactive user session. Starting a second instance should activate/open the existing instance rather than create competing service controllers.
+Only one manager instance should run per interactive user session. If another instance is launched, it should detect the existing instance and exit cleanly; activating an existing settings window is optional and not required for V1.
 
 ## 6. Quality settings UX
 
@@ -362,6 +364,7 @@ Verify on a Windows machine with an installed Resident Agent:
 9. Move sliders to Custom and confirm the current session updates within 1 second.
 10. Toggle audio off/on and verify the implemented live behavior.
 11. Confirm server, SignalR, viewer, and browser transport behavior are unchanged.
+12. During an active remote session, stop `Remotely_Service` and explicitly record whether the already-running Desktop session survives; do not infer active-session termination from service state.
 
 ## 14. Rollback
 
