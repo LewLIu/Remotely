@@ -40,6 +40,11 @@ jobs:
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           }
 
+          if (Test-Path Tests/Installer.Tests.ps1) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tests/Installer.Tests.ps1 *>&1 | Tee-Object -FilePath test-results/installer.log
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+
           if ($failed) { exit 1 }
       - name: Upload test logs
         if: always()
