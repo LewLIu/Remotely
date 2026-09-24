@@ -14,7 +14,7 @@ public interface IDtoMessageHandler
 }
 public class DtoMessageHandler : IDtoMessageHandler
 {
-    private readonly IAudioCapturer _audioCapturer;
+    private readonly IAudioPolicyController _audioPolicyController;
 
     private readonly IClipboardService _clipboardService;
 
@@ -27,13 +27,13 @@ public class DtoMessageHandler : IDtoMessageHandler
 
     public DtoMessageHandler(
         IKeyboardMouseInput keyboardMouseInput,
-        IAudioCapturer audioCapturer,
+        IAudioPolicyController audioPolicyController,
         IClipboardService clipboardService,
         IFileTransferService fileTransferService,
         ILogger<DtoMessageHandler> logger)
     {
         _keyboardMouseInput = keyboardMouseInput;
-        _audioCapturer = audioCapturer;
+        _audioPolicyController = audioPolicyController;
         _clipboardService = clipboardService;
         _fileTransferService = fileTransferService;
         _logger = logger;
@@ -317,7 +317,7 @@ public class DtoMessageHandler : IDtoMessageHandler
             return;
         }
 
-        _audioCapturer.ToggleAudio(dto!.ToggleOn);
+        _audioPolicyController.SetViewerRequested(dto!.ToggleOn);
     }
 
     private void ToggleBlockInput(DtoWrapper wrapper)

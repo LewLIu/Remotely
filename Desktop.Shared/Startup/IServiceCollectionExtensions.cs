@@ -30,6 +30,7 @@ public static class IServiceCollectionExtensions
         services.AddSingleton<IAppState, AppState>();
         services.AddSingleton<IViewerFactory, ViewerFactory>();
         services.AddSingleton<IRemoteStreamSettingsProvider, OriginalRemoteStreamSettingsProvider>();
+        services.AddSingleton<IAudioPolicyController, AudioPolicyController>();
         services.AddTransient<FrameRateGate>();
         services.AddTransient<IScreenCaster, ScreenCaster>();
         services.AddTransient<IHubConnectionBuilder>(s => new HubConnectionBuilder());
