@@ -99,7 +99,7 @@ public sealed class WindowsRemotelyServiceController : IRemotelyServiceControlle
 
             if (stopwatch.Elapsed >= timeout)
             {
-                throw new TimeoutException(
+                throw new System.TimeoutException(
                     $"Timed out waiting for {ServiceName} to reach {desired}.");
             }
 
