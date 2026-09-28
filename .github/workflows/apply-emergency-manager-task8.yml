@@ -26,87 +26,67 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          # Task 6 cleanup: ensure the Manager projects are part of the main solution.
           if (-not (Select-String -Path 'Remotely.sln' -Pattern 'Manager.Win\\Manager.Win.csproj' -Quiet)) {
             dotnet sln Remotely.sln add Manager.Win/Manager.Win.csproj Tests/Manager.Win.Tests/Manager.Win.Tests.csproj
             if ($LASTEXITCODE -ne 0) { throw 'dotnet sln add failed.' }
           }
 
-          # Task 8: publish Manager into an isolated subfolder of each Windows Agent package.
           $publishPath = 'Utilities/Publish.ps1'
           $publish = Get-Content -Raw -Path $publishPath
           if (-not $publish.Contains('Agent\bin\publish\win-x64\Manager')) {
             $needle = 'dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x86 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x86" "$Root\Agent"'
             if (-not $publish.Contains($needle)) { throw 'Publish.ps1 Agent win-x86 publish anchor not found.' }
-            $managerBlock = @'
-
-# Publish Windows Emergency Manager in an isolated subfolder so its dependencies do not overwrite Agent/Desktop assemblies.
-New-Item -Path "$Root\Agent\bin\publish\win-x64\Manager\" -ItemType Directory -Force
-New-Item -Path "$Root\Agent\bin\publish\win-x86\Manager\" -ItemType Directory -Force
-dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x64\Manager" "$Root\Manager.Win"
-dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x86 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x86\Manager" "$Root\Manager.Win"
-'@
-            $publish = $publish.Replace($needle, $needle + $managerBlock)
+            $managerLines = @(
+              '',
+              '# Publish Windows Emergency Manager in an isolated subfolder so its dependencies do not overwrite Agent/Desktop assemblies.',
+              'New-Item -Path "$Root\Agent\bin\publish\win-x64\Manager\" -ItemType Directory -Force',
+              'New-Item -Path "$Root\Agent\bin\publish\win-x86\Manager\" -ItemType Directory -Force',
+              'dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x64\Manager" "$Root\Manager.Win"',
+              'dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x86 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x86\Manager" "$Root\Manager.Win"'
+            )
+            $managerBlock = ($managerLines -join "`n")
+            $publish = $publish.Replace($needle, $needle + "`n" + $managerBlock)
             [IO.File]::WriteAllText((Resolve-Path $publishPath), $publish, [Text.UTF8Encoding]::new($false))
           }
 
-          # Task 8: extend the official Windows release pipeline coverage.
           $pipelinePath = '.azure-pipelines/Release Build.yml'
           $pipeline = Get-Content -Raw -Path $pipelinePath
           if (-not $pipeline.Contains('**\Manager.Win.Tests.csproj')) {
-            $oldProjects = @'
-      projects: |
-        **\Server.Tests.csproj
-        **\Shared.Tests.csproj
-'@
-            $newProjects = @'
-      projects: |
-        **\Server.Tests.csproj
-        **\Shared.Tests.csproj
-        **\Desktop.Win.Tests.csproj
-        **\Manager.Win.Tests.csproj
-'@
+            $oldProjects = @('      projects: |','        **\Server.Tests.csproj','        **\Shared.Tests.csproj') -join "`n"
+            $newProjects = @('      projects: |','        **\Server.Tests.csproj','        **\Shared.Tests.csproj','        **\Desktop.Win.Tests.csproj','        **\Manager.Win.Tests.csproj') -join "`n"
             if (-not $pipeline.Contains($oldProjects)) { throw 'Azure test project block anchor not found.' }
             $pipeline = $pipeline.Replace($oldProjects, $newProjects)
           }
           if (-not $pipeline.Contains('Tests/Installer.Tests.ps1')) {
             $anchor = '  - task: PowerShell@2' + "`n" + '    displayName: Create Code Signing Cert'
             if (-not $pipeline.Contains($anchor)) { throw 'Azure code-signing step anchor not found.' }
-            $installerStep = @'
-  - task: PowerShell@2
-    displayName: Installer semantics tests
-    inputs:
-      filePath: Tests/Installer.Tests.ps1
-
-'@
-            $pipeline = $pipeline.Replace($anchor, $installerStep + $anchor)
+            $installerStep = @('  - task: PowerShell@2','    displayName: Installer semantics tests','    inputs:','      filePath: Tests/Installer.Tests.ps1','') -join "`n"
+            $pipeline = $pipeline.Replace($anchor, $installerStep + "`n" + $anchor)
           }
           [IO.File]::WriteAllText((Resolve-Path $pipelinePath), $pipeline, [Text.UTF8Encoding]::new($false))
 
-          # Task 8: concise fork-specific operator guidance.
           $readmePath = 'README.md'
           $readme = Get-Content -Raw -Path $readmePath
           if (-not $readme.Contains('## Fork-specific: Windows Emergency Manager')) {
             $anchor = '## Important: HTTPS and Reverse Proxies'
             if (-not $readme.Contains($anchor)) { throw 'README insertion anchor not found.' }
-            $section = @'
-## Fork-specific: Windows Emergency Manager
-
-This fork ships an optional Windows emergency-access manager at `%ProgramFiles%\Remotely\Manager\Remotely_Manager.exe`. The Resident Agent service is installed as **Manual** and is deliberately left **Stopped** after install/update. Launching the elevated Manager starts `Remotely_Service`; choosing **Exit** stops and confirms the service before the Manager closes. V1 does not start the Manager automatically at Windows login.
-
-The Manager settings window provides **Original**, **Balanced**, **Emergency**, **Ultra Low**, and **Custom** stream profiles. `Original` preserves upstream JPEG/FPS/audio behavior. Other profiles can lower JPEG quality, cap desktop-image FPS, and suppress audio. Settings are stored locally in `%ProgramData%\Remotely\EmergencySettings.json`; Remotely identity and credentials remain in the existing `ConnectionInfo.json` and are not copied into this file. Live profile changes are consumed by an active Windows desktop session without changing the Server/SignalR/browser transport path.
-
-To disable new unattended access when finished, use **Exit** in the Manager and verify `Remotely_Service` is Stopped. The V1 service-stop behavior does not promise to terminate a desktop session that was already established before the service was stopped.
-
-'@
+            $sectionLines = @(
+              '## Fork-specific: Windows Emergency Manager',
+              '',
+              'This fork ships an optional Windows emergency-access manager at `%ProgramFiles%\Remotely\Manager\Remotely_Manager.exe`. The Resident Agent service is installed as **Manual** and is deliberately left **Stopped** after install/update. Launching the elevated Manager starts `Remotely_Service`; choosing **Exit** stops and confirms the service before the Manager closes. V1 does not start the Manager automatically at Windows login.',
+              '',
+              'The Manager settings window provides **Original**, **Balanced**, **Emergency**, **Ultra Low**, and **Custom** stream profiles. `Original` preserves upstream JPEG/FPS/audio behavior. Other profiles can lower JPEG quality, cap desktop-image FPS, and suppress audio. Settings are stored locally in `%ProgramData%\Remotely\EmergencySettings.json`; Remotely identity and credentials remain in the existing `ConnectionInfo.json` and are not copied into this file. Live profile changes are consumed by an active Windows desktop session without changing the Server/SignalR/browser transport path.',
+              '',
+              'To disable new unattended access when finished, use **Exit** in the Manager and verify `Remotely_Service` is Stopped. The V1 service-stop behavior does not promise to terminate a desktop session that was already established before the service was stopped.',
+              ''
+            )
+            $section = ($sectionLines -join "`n") + "`n"
             $readme = $readme.Replace($anchor, $section + $anchor)
             [IO.File]::WriteAllText((Resolve-Path $readmePath), $readme, [Text.UTF8Encoding]::new($false))
           }
 
-          # The helper workflow is intentionally one-shot and must not remain in the feature branch.
           Remove-Item '.github/workflows/apply-emergency-manager-task8.yml'
 
-          # Cheap structural checks before committing.
           $solutionList = dotnet sln Remotely.sln list
           if ($LASTEXITCODE -ne 0 -or $solutionList -notmatch 'Manager.Win\\Manager.Win.csproj' -or $solutionList -notmatch 'Tests\\Manager.Win.Tests\\Manager.Win.Tests.csproj') {
             throw 'Manager projects are not present in Remotely.sln.'
