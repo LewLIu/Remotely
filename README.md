@@ -21,6 +21,14 @@ wget -q https://raw.githubusercontent.com/immense/Remotely/master/docker-compose
 docker-compose up -d
 ```
 
+## Fork-specific: Windows Emergency Manager
+
+This fork ships an optional Windows emergency-access manager at `%ProgramFiles%\Remotely\Manager\Remotely_Manager.exe`. The Resident Agent service is installed as **Manual** and is deliberately left **Stopped** after install/update. Launching the elevated Manager starts `Remotely_Service`; choosing **Exit** stops and confirms the service before the Manager closes. V1 does not start the Manager automatically at Windows login.
+
+The Manager settings window provides **Original**, **Balanced**, **Emergency**, **Ultra Low**, and **Custom** stream profiles. `Original` preserves upstream JPEG/FPS/audio behavior. Other profiles can lower JPEG quality, cap desktop-image FPS, and suppress audio. Settings are stored locally in `%ProgramData%\Remotely\EmergencySettings.json`; Remotely identity and credentials remain in the existing `ConnectionInfo.json` and are not copied into this file. Live profile changes are consumed by an active Windows desktop session without changing the Server/SignalR/browser transport path.
+
+To disable new unattended access when finished, use **Exit** in the Manager and verify `Remotely_Service` is Stopped. The V1 service-stop behavior does not promise to terminate a desktop session that was already established before the service was stopped.
+
 ## Important: HTTPS and Reverse Proxies
 
 The only supported reverse proxy is Caddy, and only when it is directly facing the internet. The default configuration for Caddy provides everything that ASP.NET Core and SignalR need to function correctly.

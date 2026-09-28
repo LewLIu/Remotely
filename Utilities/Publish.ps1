@@ -100,6 +100,12 @@ if ((Test-Path -Path "$Root\Agent\bin\publish\linux-x64") -eq $true) {
 dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x64" "$Root\Agent"
 dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime linux-x64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\linux-x64" "$Root\Agent"
 dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x86 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x86" "$Root\Agent"
+
+# Publish Windows Emergency Manager in an isolated subfolder so its dependencies do not overwrite Agent/Desktop assemblies.
+New-Item -Path "$Root\Agent\bin\publish\win-x64\Manager\" -ItemType Directory -Force
+New-Item -Path "$Root\Agent\bin\publish\win-x86\Manager\" -ItemType Directory -Force
+dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x64\Manager" "$Root\Manager.Win"
+dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x86 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x86\Manager" "$Root\Manager.Win"
 dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime osx-x64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\osx-x64" "$Root\Agent"
 dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime osx-arm64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\osx-arm64" "$Root\Agent"
 

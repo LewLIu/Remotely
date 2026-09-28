@@ -62,6 +62,13 @@ jobs:
       projects: |
         **\Server.Tests.csproj
         **\Shared.Tests.csproj
+        **\Desktop.Win.Tests.csproj
+        **\Manager.Win.Tests.csproj
+
+  - task: PowerShell@2
+    displayName: Installer semantics tests
+    inputs:
+      filePath: Tests/Installer.Tests.ps1
 
   - task: PowerShell@2
     displayName: Create Code Signing Cert
