@@ -18,6 +18,17 @@ public class ManagerCoordinatorTests
     }
 
     [TestMethod]
+    public async Task Initialize_NormalizesInstalledServiceToManual()
+    {
+        var fake = new FakeServiceController(RemotelyServiceState.Running);
+        var coordinator = new ManagerCoordinator(fake);
+
+        await coordinator.InitializeAsync();
+
+        Assert.AreEqual(1, fake.EnsureManualStartCalls);
+    }
+
+    [TestMethod]
     public async Task Initialize_WhenRunning_DoesNotStartAgain()
     {
         var fake = new FakeServiceController(RemotelyServiceState.Running);
@@ -37,6 +48,7 @@ public class ManagerCoordinatorTests
 
         await coordinator.InitializeAsync();
 
+        Assert.AreEqual(0, fake.EnsureManualStartCalls);
         Assert.AreEqual(RemotelyServiceState.Error, coordinator.CurrentState);
         StringAssert.Contains(coordinator.LastError ?? string.Empty, "not installed");
     }
@@ -93,11 +105,18 @@ public class ManagerCoordinatorTests
         public RemotelyServiceState State { get; set; }
         public Exception? StartException { get; set; }
         public Exception? StopException { get; set; }
+        public int EnsureManualStartCalls { get; private set; }
         public int StartCalls { get; private set; }
         public int StopCalls { get; private set; }
 
         public Task<RemotelyServiceState> GetStateAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(State);
+
+        public Task EnsureManualStartAsync(CancellationToken cancellationToken = default)
+        {
+            EnsureManualStartCalls++;
+            return Task.CompletedTask;
+        }
 
         public Task StartAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
         {
