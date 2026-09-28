@@ -44,26 +44,32 @@ jobs:
               'dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x64 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x64\Manager" "$Root\Manager.Win"',
               'dotnet publish /p:Version=$CurrentVersion /p:FileVersion=$CurrentVersion --runtime win-x86 --self-contained --configuration Release --output "$Root\Agent\bin\publish\win-x86\Manager" "$Root\Manager.Win"'
             )
-            $managerBlock = ($managerLines -join "`n")
-            $publish = $publish.Replace($needle, $needle + "`n" + $managerBlock)
+            $publish = $publish.Replace($needle, $needle + "`r`n" + ($managerLines -join "`r`n"))
             [IO.File]::WriteAllText((Resolve-Path $publishPath), $publish, [Text.UTF8Encoding]::new($false))
           }
 
           $pipelinePath = '.azure-pipelines/Release Build.yml'
-          $pipeline = Get-Content -Raw -Path $pipelinePath
-          if (-not $pipeline.Contains('**\Manager.Win.Tests.csproj')) {
-            $oldProjects = @('      projects: |','        **\Server.Tests.csproj','        **\Shared.Tests.csproj') -join "`n"
-            $newProjects = @('      projects: |','        **\Server.Tests.csproj','        **\Shared.Tests.csproj','        **\Desktop.Win.Tests.csproj','        **\Manager.Win.Tests.csproj') -join "`n"
-            if (-not $pipeline.Contains($oldProjects)) { throw 'Azure test project block anchor not found.' }
-            $pipeline = $pipeline.Replace($oldProjects, $newProjects)
+          $pipelineLines = [Collections.Generic.List[string]]::new()
+          Get-Content -Path $pipelinePath | ForEach-Object { [void]$pipelineLines.Add($_) }
+          if (-not ($pipelineLines -contains '        **\Manager.Win.Tests.csproj')) {
+            $sharedIndex = $pipelineLines.IndexOf('        **\Shared.Tests.csproj')
+            if ($sharedIndex -lt 0) { throw 'Azure Shared.Tests project anchor not found.' }
+            $pipelineLines.Insert($sharedIndex + 1, '        **\Desktop.Win.Tests.csproj')
+            $pipelineLines.Insert($sharedIndex + 2, '        **\Manager.Win.Tests.csproj')
           }
-          if (-not $pipeline.Contains('Tests/Installer.Tests.ps1')) {
-            $anchor = '  - task: PowerShell@2' + "`n" + '    displayName: Create Code Signing Cert'
-            if (-not $pipeline.Contains($anchor)) { throw 'Azure code-signing step anchor not found.' }
-            $installerStep = @('  - task: PowerShell@2','    displayName: Installer semantics tests','    inputs:','      filePath: Tests/Installer.Tests.ps1','') -join "`n"
-            $pipeline = $pipeline.Replace($anchor, $installerStep + "`n" + $anchor)
+          if (-not (($pipelineLines -join "`n").Contains('Tests/Installer.Tests.ps1'))) {
+            $signingIndex = $pipelineLines.IndexOf('    displayName: Create Code Signing Cert')
+            if ($signingIndex -lt 1) { throw 'Azure code-signing step anchor not found.' }
+            [string[]]$installerLines = @(
+              '  - task: PowerShell@2',
+              '    displayName: Installer semantics tests',
+              '    inputs:',
+              '      filePath: Tests/Installer.Tests.ps1',
+              ''
+            )
+            $pipelineLines.InsertRange($signingIndex - 1, $installerLines)
           }
-          [IO.File]::WriteAllText((Resolve-Path $pipelinePath), $pipeline, [Text.UTF8Encoding]::new($false))
+          [IO.File]::WriteAllLines((Resolve-Path $pipelinePath), $pipelineLines, [Text.UTF8Encoding]::new($false))
 
           $readmePath = 'README.md'
           $readme = Get-Content -Raw -Path $readmePath
@@ -80,7 +86,7 @@ jobs:
               'To disable new unattended access when finished, use **Exit** in the Manager and verify `Remotely_Service` is Stopped. The V1 service-stop behavior does not promise to terminate a desktop session that was already established before the service was stopped.',
               ''
             )
-            $section = ($sectionLines -join "`n") + "`n"
+            $section = ($sectionLines -join "`r`n") + "`r`n"
             $readme = $readme.Replace($anchor, $section + $anchor)
             [IO.File]::WriteAllText((Resolve-Path $readmePath), $readme, [Text.UTF8Encoding]::new($false))
           }
