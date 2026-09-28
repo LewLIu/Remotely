@@ -93,8 +93,10 @@ jobs:
 
           Remove-Item '.github/workflows/apply-emergency-manager-task8.yml'
 
-          $solutionList = dotnet sln Remotely.sln list
-          if ($LASTEXITCODE -ne 0 -or $solutionList -notmatch 'Manager.Win\\Manager.Win.csproj' -or $solutionList -notmatch 'Tests\\Manager.Win.Tests\\Manager.Win.Tests.csproj') {
+          dotnet sln Remotely.sln list | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to read Remotely.sln.' }
+          $solutionText = Get-Content -Raw -Path 'Remotely.sln'
+          if (-not $solutionText.Contains('Manager.Win\Manager.Win.csproj') -or -not $solutionText.Contains('Tests\Manager.Win.Tests\Manager.Win.Tests.csproj')) {
             throw 'Manager projects are not present in Remotely.sln.'
           }
           if (-not (Select-String -Path $publishPath -Pattern 'win-x64\\Manager' -Quiet) -or -not (Select-String -Path $publishPath -Pattern 'win-x86\\Manager' -Quiet)) {
