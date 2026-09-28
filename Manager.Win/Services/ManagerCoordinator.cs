@@ -18,6 +18,21 @@ public sealed class ManagerCoordinator
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         await RefreshAsync(cancellationToken);
+        if (CurrentState == RemotelyServiceState.Error)
+        {
+            return;
+        }
+
+        try
+        {
+            await _serviceController.EnsureManualStartAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            SetError(ex.Message);
+            return;
+        }
+
         if (CurrentState == RemotelyServiceState.Stopped)
         {
             await StartServiceAsync(DefaultOperationTimeout, cancellationToken);

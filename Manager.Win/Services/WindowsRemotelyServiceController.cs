@@ -23,6 +23,40 @@ public sealed class WindowsRemotelyServiceController : IRemotelyServiceControlle
         }
     }
 
+    public async Task EnsureManualStartAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "sc.exe",
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        startInfo.ArgumentList.Add("config");
+        startInfo.ArgumentList.Add(ServiceName);
+        startInfo.ArgumentList.Add("start=");
+        startInfo.ArgumentList.Add("demand");
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Unable to start sc.exe to configure Remotely_Service.");
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        if (process.ExitCode != 0)
+        {
+            var detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
+            throw new InvalidOperationException(
+                $"Unable to set {ServiceName} startup type to Manual. {detail}".Trim());
+        }
+    }
+
     public async Task StartAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         using var service = new ServiceController(ServiceName);
