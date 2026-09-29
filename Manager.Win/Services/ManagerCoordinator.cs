@@ -33,7 +33,7 @@ public sealed class ManagerCoordinator
             return;
         }
 
-        if (CurrentState == RemotelyServiceState.Stopped)
+        if (CurrentState != RemotelyServiceState.Running)
         {
             await StartServiceAsync(DefaultOperationTimeout, cancellationToken);
         }
