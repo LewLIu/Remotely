@@ -46,6 +46,58 @@ jobs:
           }
 
           if ($failed) { exit 1 }
+
+      - name: Publish Windows x64 validation bundle
+        if: steps.tests.outcome == 'success'
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $PWD 'validation-package'
+          Remove-Item $bundle -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $bundle | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $bundle 'Desktop') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $bundle 'Manager') | Out-Null
+
+          dotnet publish Agent/Agent.csproj -c Release -r win-x64 --self-contained true -o $bundle
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          dotnet publish Desktop.Win/Desktop.Win.csproj -c Release -r win-x64 --self-contained true -o (Join-Path $bundle 'Desktop')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          dotnet publish Manager.Win/Manager.Win.csproj -c Release -r win-x64 --self-contained true -o (Join-Path $bundle 'Manager')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $required = @(
+            (Join-Path $bundle 'Remotely_Agent.exe'),
+            (Join-Path $bundle 'Desktop\Remotely_Desktop.exe'),
+            (Join-Path $bundle 'Manager\Remotely_Manager.exe')
+          )
+          foreach ($path in $required) {
+            if (!(Test-Path $path)) { throw "Missing required validation artifact: $path" }
+          }
+
+          @'
+          Remotely Emergency Manager - Windows x64 validation bundle
+
+          This bundle intentionally does NOT contain ConnectionInfo.json.
+          To validate against an existing Resident Agent installation:
+          1. Stop Remotely_Service.
+          2. Back up C:\Program Files\Remotely\ConnectionInfo.json.
+          3. Copy this bundle over C:\Program Files\Remotely, preserving ConnectionInfo.json.
+          4. Set Remotely_Service startup type to Manual and leave it Stopped.
+          5. Launch Manager\Remotely_Manager.exe as administrator.
+          6. The Manager should start Remotely_Service; exiting Manager should stop it.
+          '@ | Set-Content -Path (Join-Path $bundle 'VALIDATION-README.txt') -Encoding UTF8
+
+          Compress-Archive -Path "$bundle\*" -DestinationPath Remotely-Win-x64-validation.zip -Force
+
+      - name: Upload validation bundle
+        if: steps.tests.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: remotely-validation-win-x64-${{ github.run_number }}
+          path: Remotely-Win-x64-validation.zip
+          if-no-files-found: error
+
       - name: Upload test logs
         if: always()
         uses: actions/upload-artifact@v4
