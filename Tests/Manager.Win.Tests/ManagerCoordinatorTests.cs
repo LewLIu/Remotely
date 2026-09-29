@@ -18,6 +18,18 @@ public class ManagerCoordinatorTests
     }
 
     [TestMethod]
+    public async Task Initialize_WhenStopPending_DrivesServiceToRunning()
+    {
+        var fake = new FakeServiceController(RemotelyServiceState.StopPending);
+        var coordinator = new ManagerCoordinator(fake);
+
+        await coordinator.InitializeAsync();
+
+        Assert.AreEqual(1, fake.StartCalls);
+        Assert.AreEqual(RemotelyServiceState.Running, coordinator.CurrentState);
+    }
+
+    [TestMethod]
     public async Task Initialize_NormalizesInstalledServiceToManual()
     {
         var fake = new FakeServiceController(RemotelyServiceState.Running);
