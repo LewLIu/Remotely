@@ -31,15 +31,24 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Manager.Win tests failed.' }
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tests/Installer.Tests.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Installer tests failed.' }
-      - name: Build solution
+      - name: Build changed client projects
         shell: pwsh
         run: |
-          dotnet build Remotely.sln -c Release
-          if ($LASTEXITCODE -ne 0) { throw 'Solution build failed.' }
-      - name: Publish Windows packages
+          $ErrorActionPreference = 'Stop'
+          $projects = @(
+            'Shared/Shared.csproj',
+            'Desktop.Win/Desktop.Win.csproj',
+            'Agent/Agent.csproj',
+            'Manager.Win/Manager.Win.csproj'
+          )
+          foreach ($project in $projects) {
+            dotnet build $project -c Release
+            if ($LASTEXITCODE -ne 0) { throw "Build failed: $project" }
+          }
+      - name: Publish Windows packages with repository script
         shell: pwsh
         run: |
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1 -CurrentVersion '2026.09.28.0000'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1 -CurrentVersion '2026.09.29.0000'
           if ($LASTEXITCODE -ne 0) { throw 'Publish.ps1 failed.' }
       - name: Verify package contents
         shell: pwsh
