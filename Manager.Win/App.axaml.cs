@@ -145,7 +145,11 @@ public partial class App : Application
         if (_coordinator is null) return;
         try
         {
-            _coordinator.TryExitAsync(TimeSpan.FromSeconds(2)).GetAwaiter().GetResult();
+            // ShutdownRequested runs on the UI thread.  Run the bounded best-effort stop
+            // on the thread pool so async continuations cannot deadlock the UI context.
+            Task.Run(() => _coordinator.TryExitAsync(TimeSpan.FromSeconds(2)))
+                .GetAwaiter()
+                .GetResult();
         }
         catch
         {
