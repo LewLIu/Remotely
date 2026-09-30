@@ -94,8 +94,10 @@ jobs:
           export REMOTELY_BOOTSTRAP_PASSWORD="CiBootstrapPass123"
           export REMOTELY_BOOTSTRAP_ORG_ID="ci-fixed-org"
 
-          dotnet cloudbase-v3/publish/Remotely_Server.dll > "${RUNNER_TEMP}/cloudbase-server.log" 2>&1 &
+          pushd cloudbase-v3/publish > /dev/null
+          dotnet Remotely_Server.dll > "${RUNNER_TEMP}/cloudbase-server.log" 2>&1 &
           server_pid=$!
+          popd > /dev/null
           trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 
           for attempt in {1..30}; do
