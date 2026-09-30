@@ -15,7 +15,6 @@ import {
     TextTransferDto,
     FileDto,
     WindowsSessionsDto,
-    DtoWrapper,
     EmptyDto,
     FrameReceivedDto
 } from "./Interfaces/Dtos.js";
@@ -24,7 +23,17 @@ import { FileTransferProgress } from "./UI.js";
 import { DtoType } from "./Enums/DtoType.js";
 import { RemoteControlMode } from "./Enums/RemoteControlMode.js";
 
+interface PendingMouseMove {
+    percentX: number;
+    percentY: number;
+}
+
 export class MessageSender {
+    private PendingMouseMove: PendingMouseMove = null;
+    private MouseMoveFlushInFlight = false;
+    private PendingFrameReceivedTimestamp: number = null;
+    private FrameAckFlushInFlight = false;
+
     async GetWindowsSessions() {
         if (ViewerApp.Mode == RemoteControlMode.Unattended) {
             var dto = new WindowsSessionsDto();
@@ -35,16 +44,22 @@ export class MessageSender {
         await ViewerApp.ViewerHubConnection.ChangeWindowsSession(sessionId);
     }
     async SendFrameReceived(timestamp: number) {
-        var dto = new FrameReceivedDto(timestamp);
-        await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.FrameReceived);
+        this.PendingFrameReceivedTimestamp = timestamp;
+        if (!this.FrameAckFlushInFlight) {
+            this.FrameAckFlushInFlight = true;
+            void this.FlushFrameReceived();
+        }
     }
     async SendSelectScreen(displayName: string) {
         var dto = new SelectScreenDto(displayName);
         await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.SelectScreen);
     }
     async SendMouseMove(percentX: number, percentY: number) {
-        var dto = new MouseMoveDto(percentX, percentY);
-        await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.MouseMove);
+        this.PendingMouseMove = { percentX, percentY };
+        if (!this.MouseMoveFlushInFlight) {
+            this.MouseMoveFlushInFlight = true;
+            void this.FlushMouseMoves();
+        }
     }
     async SendMouseDown(button: number, percentX: number, percentY: number) {
         var dto = new MouseDownDto(button, percentX, percentY);
@@ -94,11 +109,8 @@ export class MessageSender {
         let dto = new FileDto(null, fileName, messageId, false, true);
         await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.File);
 
-
         for (var i = 0; i < buffer.byteLength; i += 50_000) {
-
             let dto = new FileDto(buffer.slice(i, i + 50_000), fileName, messageId, false, false);
-
             await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.File);
 
             if (i > 0) {
@@ -107,25 +119,62 @@ export class MessageSender {
         }
 
         dto = new FileDto(null, fileName, messageId, true, false);
-
         await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.File);
-
     }
 
     async SendToggleAudio(toggleOn: boolean) {
         var dto = new ToggleAudioDto(toggleOn);
         await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.ToggleAudio);
-
     };
     async SendToggleBlockInput(toggleOn: boolean) {
         var dto = new ToggleBlockInputDto(toggleOn);
         await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.ToggleBlockInput);
-
     }
 
     async SendTextTransfer(text: string, typeText: boolean) {
         var dto = new TextTransferDto(text, typeText);
         await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.TextTransfer);
+    }
 
+    private async FlushMouseMoves(): Promise<void> {
+        try {
+            while (this.PendingMouseMove !== null) {
+                const next = this.PendingMouseMove;
+                this.PendingMouseMove = null;
+                const dto = new MouseMoveDto(next.percentX, next.percentY);
+                await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.MouseMove);
+            }
+        }
+        catch (ex) {
+            console.warn("Unable to flush latest mouse move.", ex);
+        }
+        finally {
+            this.MouseMoveFlushInFlight = false;
+            if (this.PendingMouseMove !== null) {
+                this.MouseMoveFlushInFlight = true;
+                void this.FlushMouseMoves();
+            }
+        }
+    }
+
+    private async FlushFrameReceived(): Promise<void> {
+        try {
+            while (this.PendingFrameReceivedTimestamp !== null) {
+                const timestamp = this.PendingFrameReceivedTimestamp;
+                this.PendingFrameReceivedTimestamp = null;
+                const dto = new FrameReceivedDto(timestamp);
+                await ViewerApp.ViewerHubConnection.SendDtoToClient(dto, DtoType.FrameReceived);
+            }
+        }
+        catch (ex) {
+            console.warn("Unable to flush latest frame acknowledgement.", ex);
+        }
+        finally {
+            this.FrameAckFlushInFlight = false;
+            if (this.PendingFrameReceivedTimestamp !== null) {
+                this.FrameAckFlushInFlight = true;
+                void this.FlushFrameReceived();
+            }
+        }
     }
 }
