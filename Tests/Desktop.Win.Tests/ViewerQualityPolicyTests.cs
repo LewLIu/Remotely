@@ -12,19 +12,19 @@ namespace Remotely.Desktop.Win.Tests;
 public class ViewerQualityPolicyTests
 {
     [TestMethod]
-    public async Task EmergencyProfile_SetsQuality45_AndAutoQualityDoesNotClimb()
+    public async Task EmergencyProfile_SetsQuality35_AndAutoQualityDoesNotClimb()
     {
         var provider = new MutableSettingsProvider(RemoteStreamSettings.Emergency);
         using var viewer = CreateViewer(provider);
 
-        Assert.AreEqual(45, viewer.ImageQuality);
+        Assert.AreEqual(35, viewer.ImageQuality);
 
         for (var i = 0; i < 10; i++)
         {
             await viewer.ApplyAutoQuality();
         }
 
-        Assert.AreEqual(45, viewer.ImageQuality);
+        Assert.AreEqual(35, viewer.ImageQuality);
     }
 
     [TestMethod]
@@ -35,7 +35,7 @@ public class ViewerQualityPolicyTests
 
         provider.Set(RemoteStreamSettings.UltraLow);
 
-        Assert.AreEqual(30, viewer.ImageQuality);
+        Assert.AreEqual(20, viewer.ImageQuality);
     }
 
     [TestMethod]
@@ -43,13 +43,13 @@ public class ViewerQualityPolicyTests
     {
         var provider = new MutableSettingsProvider(RemoteStreamSettings.Emergency);
         using var viewer = CreateViewer(provider);
-        Assert.AreEqual(45, viewer.ImageQuality);
+        Assert.AreEqual(35, viewer.ImageQuality);
 
         provider.Set(RemoteStreamSettings.Original);
-        Assert.AreEqual(45, viewer.ImageQuality, "Returning to Original should resume, not jump, upstream auto-quality.");
+        Assert.AreEqual(35, viewer.ImageQuality, "Returning to Original should resume, not jump, upstream auto-quality.");
 
         await viewer.ApplyAutoQuality();
-        Assert.AreEqual(47, viewer.ImageQuality);
+        Assert.AreEqual(37, viewer.ImageQuality);
 
         for (var i = 0; i < 30; i++)
         {
