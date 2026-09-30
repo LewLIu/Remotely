@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Remotely.Manager.Win.Views.SettingsWindow"
-        Width="460" Height="430"
+        Width="460" Height="500"
         CanResize="False"
         WindowStartupLocation="CenterScreen"
         Title="Remotely Manager Settings">
@@ -12,6 +12,12 @@
 
       <TextBlock Text="Preset" FontWeight="SemiBold" />
       <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding Profile, Mode=TwoWay}" />
+
+      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="Stream Resolution" FontWeight="SemiBold" />
+        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding ResolutionText}" />
+        <ComboBox Grid.Row="1" Grid.ColumnSpan="2" ItemsSource="{Binding ResolutionOptions}" SelectedItem="{Binding Resolution, Mode=TwoWay}" />
+      </Grid>
 
       <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
         <TextBlock Grid.Row="0" Grid.Column="0" Text="Image Quality" FontWeight="SemiBold" />

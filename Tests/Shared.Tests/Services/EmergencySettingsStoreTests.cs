@@ -21,19 +21,14 @@ public class EmergencySettingsStoreTests
     [TestCleanup]
     public void TearDown()
     {
-        if (Directory.Exists(_directory))
-        {
-            Directory.Delete(_directory, true);
-        }
+        if (Directory.Exists(_directory)) Directory.Delete(_directory, true);
     }
 
     [TestMethod]
     public void MissingFile_ReturnsOriginalWithoutWarning()
     {
         var store = new EmergencySettingsStore(_path);
-
         var settings = store.Load(out var warning);
-
         Assert.AreEqual(RemoteStreamSettings.Original, settings);
         Assert.IsNull(warning);
     }
@@ -44,15 +39,13 @@ public class EmergencySettingsStoreTests
         Directory.CreateDirectory(_directory);
         File.WriteAllText(_path, "{not-json");
         var store = new EmergencySettingsStore(_path);
-
         var settings = store.Load(out var warning);
-
         Assert.AreEqual(RemoteStreamSettings.Original, settings);
         Assert.IsFalse(string.IsNullOrWhiteSpace(warning));
     }
 
     [TestMethod]
-    public void UnknownFields_AreTolerated()
+    public void V1FileWithoutResolution_RemainsBackwardCompatible()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllText(_path, """
@@ -69,7 +62,11 @@ public class EmergencySettingsStoreTests
 
         var settings = store.Load(out var warning);
 
-        Assert.AreEqual(RemoteStreamSettings.Emergency, settings);
+        Assert.AreEqual(
+            new RemoteStreamSettings(1, RemoteStreamProfile.Emergency, 45, 8, RemoteAudioMode.Off),
+            settings);
+        Assert.IsNull(settings.MaxStreamWidth);
+        Assert.IsNull(settings.MaxStreamHeight);
         Assert.IsNull(warning);
     }
 
@@ -77,11 +74,9 @@ public class EmergencySettingsStoreTests
     public async Task ValidCustom_RoundTrips()
     {
         var store = new EmergencySettingsStore(_path);
-        var expected = new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 52, 9, RemoteAudioMode.Off);
-
+        var expected = new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 52, 9, RemoteAudioMode.Off, 960, 540);
         await store.SaveAsync(expected, CancellationToken.None);
         var actual = store.Load(out var warning);
-
         Assert.AreEqual(expected, actual);
         Assert.IsNull(warning);
     }
@@ -92,9 +87,7 @@ public class EmergencySettingsStoreTests
         var store = new EmergencySettingsStore(_path);
         await store.SaveAsync(RemoteStreamSettings.Balanced, CancellationToken.None);
         var invalid = new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 10, 8, RemoteAudioMode.Off);
-
         await Assert.ThrowsExceptionAsync<ArgumentException>(() => store.SaveAsync(invalid, CancellationToken.None));
-
         var actual = store.Load(out _);
         Assert.AreEqual(RemoteStreamSettings.Balanced, actual);
         Assert.IsFalse(File.Exists(_path + ".tmp"));
@@ -114,9 +107,7 @@ public class EmergencySettingsStoreTests
         };
         File.WriteAllText(_path, JsonSerializer.Serialize(invalid));
         var store = new EmergencySettingsStore(_path);
-
         var settings = store.Load(out var warning);
-
         Assert.AreEqual(RemoteStreamSettings.Original, settings);
         Assert.IsFalse(string.IsNullOrWhiteSpace(warning));
     }

@@ -9,11 +9,13 @@ namespace Remotely.Manager.Win.ViewModels;
 public sealed class SettingsViewModel : INotifyPropertyChanged
 {
     private readonly IEmergencySettingsStore _store;
+    private readonly List<string> _resolutionOptions = ["Native", "1600x900", "1280x720", "960x540", "640x360"];
     private bool _applyingSnapshot;
     private bool _enableAudio;
     private int _imageQuality;
     private int? _maxFps;
     private RemoteStreamProfile _profile;
+    private string _resolution = "Native";
 
     public SettingsViewModel(IEmergencySettingsStore store)
     {
@@ -27,6 +29,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public IReadOnlyList<RemoteStreamProfile> Profiles { get; }
+    public IReadOnlyList<string> ResolutionOptions => _resolutionOptions;
     public string? Warning { get; }
 
     public RemoteStreamProfile Profile
@@ -72,6 +75,21 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    public string Resolution
+    {
+        get => _resolution;
+        set
+        {
+            _ = ParseResolution(value);
+            if (_resolution == value) return;
+            _resolution = value;
+            if (!_resolutionOptions.Contains(value)) _resolutionOptions.Add(value);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ResolutionText));
+            if (!_applyingSnapshot) MarkCustom();
+        }
+    }
+
     public bool EnableAudio
     {
         get => _enableAudio;
@@ -87,18 +105,22 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
 
     public bool UsesOriginalBehavior => Profile == RemoteStreamProfile.Original;
     public string MaxFpsText => UsesOriginalBehavior ? "Original behavior" : MaxFps?.ToString() ?? "—";
+    public string ResolutionText => UsesOriginalBehavior ? "Original behavior" : Resolution;
     public string AudioText => UsesOriginalBehavior ? "Original behavior" : EnableAudio ? "On" : "Off";
 
     public void SelectPreset(RemoteStreamProfile profile)
     {
         if (profile == RemoteStreamProfile.Custom)
         {
+            var caps = ParseResolution(Resolution);
             ApplySnapshot(new RemoteStreamSettings(
                 1,
                 RemoteStreamProfile.Custom,
                 ImageQuality == 0 ? 80 : ImageQuality,
                 MaxFps ?? 30,
-                EnableAudio ? RemoteAudioMode.Original : RemoteAudioMode.Off));
+                EnableAudio ? RemoteAudioMode.Original : RemoteAudioMode.Off,
+                caps.Width,
+                caps.Height));
             return;
         }
 
@@ -117,27 +139,35 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     public async Task SaveAsync(CancellationToken cancellationToken = default)
     {
         var settings = BuildSnapshot();
-        if (!settings.TryValidate(out var error))
-            throw new InvalidOperationException(error);
+        if (!settings.TryValidate(out var error)) throw new InvalidOperationException(error);
         await _store.SaveAsync(settings, cancellationToken);
     }
 
     private RemoteStreamSettings BuildSnapshot()
-        => Profile switch
+    {
+        if (Profile != RemoteStreamProfile.Custom)
         {
-            RemoteStreamProfile.Original => RemoteStreamSettings.Original,
-            RemoteStreamProfile.Balanced => RemoteStreamSettings.Balanced,
-            RemoteStreamProfile.Emergency => RemoteStreamSettings.Emergency,
-            RemoteStreamProfile.UltraLow => RemoteStreamSettings.UltraLow,
-            RemoteStreamProfile.Custom when MaxFps is not null => new RemoteStreamSettings(
-                1,
-                RemoteStreamProfile.Custom,
-                ImageQuality,
-                MaxFps,
-                EnableAudio ? RemoteAudioMode.Original : RemoteAudioMode.Off),
-            RemoteStreamProfile.Custom => throw new InvalidOperationException("Custom profile requires a Max FPS value."),
-            _ => throw new ArgumentOutOfRangeException()
-        };
+            return Profile switch
+            {
+                RemoteStreamProfile.Original => RemoteStreamSettings.Original,
+                RemoteStreamProfile.Balanced => RemoteStreamSettings.Balanced,
+                RemoteStreamProfile.Emergency => RemoteStreamSettings.Emergency,
+                RemoteStreamProfile.UltraLow => RemoteStreamSettings.UltraLow,
+                _ => throw new ArgumentOutOfRangeException()
+            };
+        }
+
+        if (MaxFps is null) throw new InvalidOperationException("Custom profile requires a Max FPS value.");
+        var caps = ParseResolution(Resolution);
+        return new RemoteStreamSettings(
+            1,
+            RemoteStreamProfile.Custom,
+            ImageQuality,
+            MaxFps,
+            EnableAudio ? RemoteAudioMode.Original : RemoteAudioMode.Off,
+            caps.Width,
+            caps.Height);
+    }
 
     private void ApplySnapshot(RemoteStreamSettings settings)
     {
@@ -148,6 +178,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             _imageQuality = settings.ImageQuality;
             _maxFps = settings.MaxFps;
             _enableAudio = settings.AudioMode != RemoteAudioMode.Off;
+            _resolution = FormatResolution(settings.MaxStreamWidth, settings.MaxStreamHeight);
+            if (!_resolutionOptions.Contains(_resolution)) _resolutionOptions.Add(_resolution);
         }
         finally
         {
@@ -157,9 +189,11 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(Profile));
         OnPropertyChanged(nameof(ImageQuality));
         OnPropertyChanged(nameof(MaxFps));
+        OnPropertyChanged(nameof(Resolution));
         OnPropertyChanged(nameof(EnableAudio));
         OnPropertyChanged(nameof(UsesOriginalBehavior));
         OnPropertyChanged(nameof(MaxFpsText));
+        OnPropertyChanged(nameof(ResolutionText));
         OnPropertyChanged(nameof(AudioText));
     }
 
@@ -172,8 +206,24 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(MaxFps));
         OnPropertyChanged(nameof(UsesOriginalBehavior));
         OnPropertyChanged(nameof(MaxFpsText));
+        OnPropertyChanged(nameof(ResolutionText));
         OnPropertyChanged(nameof(AudioText));
     }
+
+    private static (int? Width, int? Height) ParseResolution(string value)
+    {
+        if (string.Equals(value, "Native", StringComparison.OrdinalIgnoreCase)) return (null, null);
+        var parts = value.Split('x', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2 || !int.TryParse(parts[0], out var width) || !int.TryParse(parts[1], out var height) ||
+            width < 640 || width > 7680 || height < 360 || height > 4320)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value), "Resolution must be Native or a valid WIDTHxHEIGHT value.");
+        }
+        return (width, height);
+    }
+
+    private static string FormatResolution(int? width, int? height)
+        => width is null || height is null ? "Native" : $"{width}x{height}";
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
         => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
