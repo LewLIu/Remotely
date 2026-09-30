@@ -1,7 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         x:Class="Remotely.Manager.Win.Views.SettingsWindow"
-        Width="460" Height="500"
+        Width="460" Height="570"
         CanResize="False"
         WindowStartupLocation="CenterScreen"
         Title="Remotely Manager Settings">
@@ -30,6 +30,9 @@
         <TextBlock Grid.Row="0" Grid.Column="1" HorizontalAlignment="Right" Text="{Binding MaxFpsText}" />
         <NumericUpDown Grid.Row="1" Grid.ColumnSpan="2" Minimum="2" Maximum="30" Increment="1" Value="{Binding MaxFps, Mode=TwoWay}" />
       </Grid>
+
+      <CheckBox Content="Low latency: keep latest frame only" IsChecked="{Binding PreferLatestFrame, Mode=TwoWay}" />
+      <TextBlock Text="When enabled, full frames are self-contained and pending stale frames may be replaced. Intended for constrained LongPolling links." TextWrapping="Wrap" Opacity="0.70" FontSize="12" Margin="24,-10,0,0" />
 
       <Grid ColumnDefinitions="*,Auto">
         <CheckBox Grid.Column="0" Content="Enable Audio" IsChecked="{Binding EnableAudio, Mode=TwoWay}" />

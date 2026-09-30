@@ -9,7 +9,8 @@ public sealed record RemoteStreamSettings(
     int? MaxFps,
     RemoteAudioMode AudioMode,
     int? MaxStreamWidth = null,
-    int? MaxStreamHeight = null)
+    int? MaxStreamHeight = null,
+    bool PreferLatestFrame = false)
 {
     public static RemoteStreamSettings Original =>
         new(1, RemoteStreamProfile.Original, 80, null, RemoteAudioMode.Original);
@@ -21,7 +22,7 @@ public sealed record RemoteStreamSettings(
         new(1, RemoteStreamProfile.Emergency, 35, 20, RemoteAudioMode.Off, 1280, 720);
 
     public static RemoteStreamSettings UltraLow =>
-        new(1, RemoteStreamProfile.UltraLow, 20, 20, RemoteAudioMode.Off, 960, 540);
+        new(1, RemoteStreamProfile.UltraLow, 20, 20, RemoteAudioMode.Off, 960, 540, true);
 
     public bool TryValidate(out string error)
     {
@@ -66,7 +67,8 @@ public sealed record RemoteStreamSettings(
              MaxFps is not null ||
              AudioMode != RemoteAudioMode.Original ||
              MaxStreamWidth is not null ||
-             MaxStreamHeight is not null))
+             MaxStreamHeight is not null ||
+             PreferLatestFrame))
         {
             error = "Original profile must preserve upstream behavior.";
             return false;

@@ -14,6 +14,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
     private bool _enableAudio;
     private int _imageQuality;
     private int? _maxFps;
+    private bool _preferLatestFrame;
     private RemoteStreamProfile _profile;
     private string _resolution = "Native";
 
@@ -103,6 +104,18 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    public bool PreferLatestFrame
+    {
+        get => _preferLatestFrame;
+        set
+        {
+            if (_preferLatestFrame == value) return;
+            _preferLatestFrame = value;
+            OnPropertyChanged();
+            if (!_applyingSnapshot) MarkCustom();
+        }
+    }
+
     public bool UsesOriginalBehavior => Profile == RemoteStreamProfile.Original;
     public string MaxFpsText => UsesOriginalBehavior ? "Original behavior" : MaxFps?.ToString() ?? "—";
     public string ResolutionText => UsesOriginalBehavior ? "Original behavior" : Resolution;
@@ -120,7 +133,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
                 MaxFps ?? 30,
                 EnableAudio ? RemoteAudioMode.Original : RemoteAudioMode.Off,
                 caps.Width,
-                caps.Height));
+                caps.Height,
+                PreferLatestFrame));
             return;
         }
 
@@ -166,7 +180,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             MaxFps,
             EnableAudio ? RemoteAudioMode.Original : RemoteAudioMode.Off,
             caps.Width,
-            caps.Height);
+            caps.Height,
+            PreferLatestFrame);
     }
 
     private void ApplySnapshot(RemoteStreamSettings settings)
@@ -178,6 +193,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
             _imageQuality = settings.ImageQuality;
             _maxFps = settings.MaxFps;
             _enableAudio = settings.AudioMode != RemoteAudioMode.Off;
+            _preferLatestFrame = settings.PreferLatestFrame;
             _resolution = FormatResolution(settings.MaxStreamWidth, settings.MaxStreamHeight);
             if (!_resolutionOptions.Contains(_resolution)) _resolutionOptions.Add(_resolution);
         }
@@ -191,6 +207,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(MaxFps));
         OnPropertyChanged(nameof(Resolution));
         OnPropertyChanged(nameof(EnableAudio));
+        OnPropertyChanged(nameof(PreferLatestFrame));
         OnPropertyChanged(nameof(UsesOriginalBehavior));
         OnPropertyChanged(nameof(MaxFpsText));
         OnPropertyChanged(nameof(ResolutionText));
