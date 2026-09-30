@@ -131,6 +131,61 @@ jobs:
               > SHA256SUMS.txt
           )
 
+      - name: Build and smoke test CloudBase container twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_name="remotely-v3-cloudbase-ci"
+          password="CiDockerBootstrapPass123"
+
+          docker build -t "$image_name" cloudbase-v3
+
+          cleanup() {
+            docker rm -f remotely-v3-cloudbase-first remotely-v3-cloudbase-second 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          run_fresh_container() {
+            local name="$1"
+            local host_port="$2"
+
+            docker run -d \
+              --name "$name" \
+              -p "${host_port}:5000" \
+              -e Remotely_ApplicationOptions__DbProvider=SQLite \
+              -e "Remotely_ConnectionStrings__SQLite=Data Source=/app/AppData/Remotely.db" \
+              -e REMOTELY_BOOTSTRAP_EMAIL=ci-docker-bootstrap@example.test \
+              -e "REMOTELY_BOOTSTRAP_PASSWORD=${password}" \
+              -e REMOTELY_BOOTSTRAP_ORG_ID=ci-docker-fixed-org \
+              "$image_name" > /dev/null
+
+            for attempt in {1..30}; do
+              if curl -fsS "http://127.0.0.1:${host_port}/api/healthcheck" > /dev/null; then
+                docker logs "$name" 2>&1 | grep -q "Created bootstrap administrator"
+                if docker logs "$name" 2>&1 | grep -Fq "$password"; then
+                  echo "Bootstrap password appeared in container logs."
+                  exit 1
+                fi
+                docker rm -f "$name" > /dev/null
+                return 0
+              fi
+
+              if [ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null || true)" != "true" ]; then
+                docker logs "$name" 2>&1 || true
+                exit 1
+              fi
+              sleep 1
+            done
+
+            docker logs "$name" 2>&1 || true
+            exit 1
+          }
+
+          # Each container starts without a volume, so both runs begin from a fresh SQLite database.
+          # This verifies that the same Bootstrap identity can recreate itself after an ephemeral reset.
+          run_fresh_container remotely-v3-cloudbase-first 5100
+          run_fresh_container remotely-v3-cloudbase-second 5101
+
       - name: Upload CloudBase V3 server package
         uses: actions/upload-artifact@v4
         with:
