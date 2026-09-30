@@ -12,3 +12,5 @@ Context: the enterprise browser is restricted to ordinary HTTPS/SignalR LongPoll
 8. Browser input: coalesce MouseMove so at most one invoke is in flight and only the latest pending coordinates are retained. MouseDown/MouseUp/keyboard/tap remain reliable and are never intentionally dropped.
 9. Validate TypeScript/browser source separately from the existing client package CI. Browser changes require a custom server/static asset deployment; do not claim they are active on CloudBase until that deployment is completed.
 10. Run Shared/Desktop/Manager/Installer tests, Windows x64 validation publish, official client package publish, then perform real enterprise-network A/B: Emergency (reliable diff) vs Ultra Low (latest full frame). Physical E2E remains pending until the user reports results.
+
+TDD checkpoint: the first commit intentionally contains tests that reference the not-yet-implemented latency flag and latest-frame queue. The native CI run must fail before implementation is added.
