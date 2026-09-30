@@ -152,6 +152,7 @@ jobs:
           run_fresh_container() {
             local name="$1"
             local host_port="$2"
+            local container_logs
 
             docker run -d \
               --name "$name" \
@@ -165,8 +166,9 @@ jobs:
 
             for attempt in {1..30}; do
               if curl -sS -o /dev/null "http://127.0.0.1:${host_port}/"; then
-                docker logs "$name" 2>&1 | grep -q "Created bootstrap administrator"
-                if docker logs "$name" 2>&1 | grep -Fq "$password"; then
+                container_logs="$(docker logs "$name" 2>&1)"
+                grep -q "Created bootstrap administrator" <<< "$container_logs"
+                if grep -Fq "$password" <<< "$container_logs"; then
                   echo "Bootstrap password appeared in container logs."
                   exit 1
                 fi
