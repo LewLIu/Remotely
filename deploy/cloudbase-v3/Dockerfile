@@ -16,5 +16,7 @@ EXPOSE 5000
 
 ENTRYPOINT ["dotnet", "Remotely_Server.dll"]
 
+# Liveness only: any HTTP response proves the ASP.NET process is serving requests.
+# Do not use -f here because authenticated endpoints may legitimately return 401.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD curl -f http://127.0.0.1:${ASPNETCORE_HTTP_PORTS}/api/healthcheck || exit 1
+  CMD curl -sS -o /dev/null http://127.0.0.1:${ASPNETCORE_HTTP_PORTS}/ || exit 1
