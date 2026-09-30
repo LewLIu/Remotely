@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Remotely.Server.Data;
 using Remotely.Shared.Entities;
+using Remotely.Shared.Models;
 
 namespace Remotely.Server.Services;
 
