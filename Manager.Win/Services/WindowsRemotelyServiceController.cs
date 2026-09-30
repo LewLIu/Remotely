@@ -27,6 +27,17 @@ public sealed class WindowsRemotelyServiceController : IRemotelyServiceControlle
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        // The current installer already creates Remotely_Service as Manual. Avoid running
+        // sc.exe on every Manager launch when the desired state is already satisfied.
+        using (var service = new ServiceController(ServiceName))
+        {
+            service.Refresh();
+            if (!ServiceStartupPolicy.RequiresManualConfiguration(service.StartType))
+            {
+                return;
+            }
+        }
+
         var startInfo = new ProcessStartInfo
         {
             FileName = "sc.exe",
@@ -53,7 +64,15 @@ public sealed class WindowsRemotelyServiceController : IRemotelyServiceControlle
         {
             var detail = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
             throw new InvalidOperationException(
-                $"Unable to set {ServiceName} startup type to Manual. {detail}".Trim());
+                $"Unable to set {ServiceName} startup type to Manual. sc.exe exit code {process.ExitCode}. {detail}".Trim());
+        }
+
+        using var verification = new ServiceController(ServiceName);
+        verification.Refresh();
+        if (verification.StartType != ServiceStartMode.Manual)
+        {
+            throw new InvalidOperationException(
+                $"Unable to confirm {ServiceName} startup type is Manual after sc.exe completed successfully.");
         }
     }
 
