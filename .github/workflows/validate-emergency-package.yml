@@ -6,6 +6,16 @@ on:
       - feature/emergency-manager-low-bandwidth
     paths:
       - .github/workflows/validate-emergency-package.yml
+      - Shared/**
+      - Desktop.Shared/**
+      - Desktop.Native/**
+      - Desktop.UI/**
+      - Desktop.Win/**
+      - Agent/**
+      - Manager.Win/**
+      - Tests/**
+      - Utilities/Publish.ps1
+      - Server/wwwroot/Content/Install-Remotely.ps1
   workflow_dispatch:
 
 jobs:
@@ -48,7 +58,7 @@ jobs:
       - name: Publish Windows packages with repository script
         shell: pwsh
         run: |
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1 -CurrentVersion '2026.09.29.0000'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1 -CurrentVersion '2026.09.30.0000'
           if ($LASTEXITCODE -ne 0) { throw 'Publish.ps1 failed.' }
       - name: Verify package contents
         shell: pwsh
