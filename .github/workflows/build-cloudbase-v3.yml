@@ -1,0 +1,138 @@
+name: Build V3 CloudBase Server
+
+on:
+  push:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+    paths:
+      - Server/**
+      - Shared/**
+      - Tests/Server.Tests/**
+      - deploy/cloudbase-v3/**
+      - docs/cloudbase-bootstrap.md
+      - .github/workflows/build-cloudbase-v3.yml
+  pull_request:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+    paths:
+      - Server/**
+      - Shared/**
+      - Tests/Server.Tests/**
+      - deploy/cloudbase-v3/**
+      - docs/cloudbase-bootstrap.md
+      - .github/workflows/build-cloudbase-v3.yml
+  workflow_dispatch:
+
+jobs:
+  build-cloudbase-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Disable LibMan network restore
+        run: mv Server/libman.json Server/libman.json.ci-disabled
+
+      - name: Run server tests
+        run: dotnet test Tests/Server.Tests/Server.Tests.csproj -c Release
+
+      - name: Compile V3 browser low-latency modules
+        run: |
+          rm -rf browser-build
+          npx --yes -p typescript@5.6.2 tsc \
+            --target ES2020 \
+            --module ES2020 \
+            --moduleResolution node \
+            --lib DOM,ES2020 \
+            --skipLibCheck \
+            --rootDir Server/wwwroot/src \
+            --outDir browser-build \
+            Server/wwwroot/src/CaptureProcessor.ts \
+            Server/wwwroot/src/MessageSender.ts \
+            Server/wwwroot/src/FrameBufferPolicy.ts
+          cp browser-build/CaptureProcessor.js Server/wwwroot/src/CaptureProcessor.js
+          cp browser-build/MessageSender.js Server/wwwroot/src/MessageSender.js
+          cp browser-build/FrameBufferPolicy.js Server/wwwroot/src/FrameBufferPolicy.js
+
+      - name: Publish custom V3 server
+        run: |
+          rm -rf cloudbase-v3
+          mkdir -p cloudbase-v3/publish
+          dotnet publish Server/Server.csproj \
+            -c Release \
+            --no-self-contained \
+            -o cloudbase-v3/publish
+
+      - name: Verify Bootstrap and V3 browser payload
+        run: |
+          test -s cloudbase-v3/publish/Remotely_Server.dll
+          test -s cloudbase-v3/publish/wwwroot/src/CaptureProcessor.js
+          test -s cloudbase-v3/publish/wwwroot/src/MessageSender.js
+          test -s cloudbase-v3/publish/wwwroot/src/FrameBufferPolicy.js
+          grep -q "FindFreshestSafeFrameStart" cloudbase-v3/publish/wwwroot/src/CaptureProcessor.js
+          grep -q "FlushMouseMoves" cloudbase-v3/publish/wwwroot/src/MessageSender.js
+          grep -q "FlushFrameReceived" cloudbase-v3/publish/wwwroot/src/MessageSender.js
+          grep -q "FindFreshestSafeFrameStart" cloudbase-v3/publish/wwwroot/src/FrameBufferPolicy.js
+
+      - name: Smoke test published server with Bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ASPNETCORE_ENVIRONMENT=Production
+          export ASPNETCORE_HTTP_PORTS=5099
+          export Remotely_ApplicationOptions__DbProvider=SQLite
+          export Remotely_ConnectionStrings__SQLite="Data Source=${RUNNER_TEMP}/cloudbase-bootstrap-smoke.db"
+          export REMOTELY_BOOTSTRAP_EMAIL="ci-bootstrap@example.test"
+          export REMOTELY_BOOTSTRAP_PASSWORD="CiBootstrapPass123"
+          export REMOTELY_BOOTSTRAP_ORG_ID="ci-fixed-org"
+
+          dotnet cloudbase-v3/publish/Remotely_Server.dll > "${RUNNER_TEMP}/cloudbase-server.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:5099/api/healthcheck > /dev/null; then
+              grep -q "Created bootstrap administrator" "${RUNNER_TEMP}/cloudbase-server.log"
+              exit 0
+            fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat "${RUNNER_TEMP}/cloudbase-server.log"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          cat "${RUNNER_TEMP}/cloudbase-server.log"
+          exit 1
+
+      - name: Assemble CloudBase Docker build context
+        run: |
+          cp deploy/cloudbase-v3/Dockerfile cloudbase-v3/Dockerfile
+          cp deploy/cloudbase-v3/environment.example cloudbase-v3/environment.example
+          cp docs/cloudbase-bootstrap.md cloudbase-v3/README.md
+          printf 'commit=%s\n' "$GITHUB_SHA" > cloudbase-v3/BUILD_INFO.txt
+          (
+            cd cloudbase-v3
+            sha256sum \
+              publish/Remotely_Server.dll \
+              publish/wwwroot/src/CaptureProcessor.js \
+              publish/wwwroot/src/MessageSender.js \
+              publish/wwwroot/src/FrameBufferPolicy.js \
+              > SHA256SUMS.txt
+          )
+
+      - name: Upload CloudBase V3 server package
+        uses: actions/upload-artifact@v4
+        with:
+          name: remotely-v3-cloudbase-server
+          path: cloudbase-v3/
+          if-no-files-found: error
+          retention-days: 30
