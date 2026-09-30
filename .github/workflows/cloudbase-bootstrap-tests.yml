@@ -1,0 +1,24 @@
+name: CloudBase Bootstrap Tests
+
+on:
+  push:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+  pull_request:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+  workflow_dispatch:
+
+jobs:
+  server-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Disable LibMan restore for server unit tests
+        run: mv Server/libman.json Server/libman.json.ci-disabled
+      - name: Run Server.Tests
+        run: dotnet test Tests/Server.Tests/Server.Tests.csproj -c Release
