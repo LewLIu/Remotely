@@ -7,13 +7,14 @@ namespace Remotely.Shared.Tests.Models;
 public class RemoteStreamSettingsTests
 {
     [TestMethod]
-    public void Presets_MatchApprovedV2Values()
+    public void Presets_MatchApprovedV3Values()
     {
         Assert.AreEqual(80, RemoteStreamSettings.Original.ImageQuality);
         Assert.IsNull(RemoteStreamSettings.Original.MaxFps);
         Assert.IsNull(RemoteStreamSettings.Original.MaxStreamWidth);
         Assert.IsNull(RemoteStreamSettings.Original.MaxStreamHeight);
         Assert.AreEqual(RemoteAudioMode.Original, RemoteStreamSettings.Original.AudioMode);
+        Assert.IsFalse(RemoteStreamSettings.Original.PreferLatestFrame);
 
         Assert.AreEqual(
             new RemoteStreamSettings(1, RemoteStreamProfile.Balanced, 55, 20, RemoteAudioMode.Off, 1600, 900),
@@ -22,7 +23,7 @@ public class RemoteStreamSettingsTests
             new RemoteStreamSettings(1, RemoteStreamProfile.Emergency, 35, 20, RemoteAudioMode.Off, 1280, 720),
             RemoteStreamSettings.Emergency);
         Assert.AreEqual(
-            new RemoteStreamSettings(1, RemoteStreamProfile.UltraLow, 20, 20, RemoteAudioMode.Off, 960, 540),
+            new RemoteStreamSettings(1, RemoteStreamProfile.UltraLow, 20, 20, RemoteAudioMode.Off, 960, 540, true),
             RemoteStreamSettings.UltraLow);
     }
 
@@ -42,12 +43,13 @@ public class RemoteStreamSettingsTests
         Assert.IsFalse(new RemoteStreamSettings(1, RemoteStreamProfile.Original, 80, 30, RemoteAudioMode.Original).TryValidate(out _));
         Assert.IsFalse(new RemoteStreamSettings(1, RemoteStreamProfile.Original, 80, null, RemoteAudioMode.Off).TryValidate(out _));
         Assert.IsFalse(new RemoteStreamSettings(1, RemoteStreamProfile.Original, 80, null, RemoteAudioMode.Original, 1280, 720).TryValidate(out _));
+        Assert.IsFalse(new RemoteStreamSettings(1, RemoteStreamProfile.Original, 80, null, RemoteAudioMode.Original, null, null, true).TryValidate(out _));
     }
 
     [TestMethod]
     public void SupportedCustomBounds_AreAccepted()
     {
-        Assert.IsTrue(new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 20, 2, RemoteAudioMode.Off, 640, 360).TryValidate(out _));
+        Assert.IsTrue(new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 20, 2, RemoteAudioMode.Off, 640, 360, true).TryValidate(out _));
         Assert.IsTrue(new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 90, 30, RemoteAudioMode.Original, 1600, 900).TryValidate(out _));
         Assert.IsTrue(new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 90, 30, RemoteAudioMode.Original).TryValidate(out _));
     }

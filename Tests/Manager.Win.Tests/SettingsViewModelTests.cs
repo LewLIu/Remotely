@@ -18,6 +18,17 @@ public class SettingsViewModelTests
         Assert.AreEqual(20, vm.MaxFps);
         Assert.AreEqual("1280x720", vm.Resolution);
         Assert.IsFalse(vm.EnableAudio);
+        Assert.IsFalse(vm.PreferLatestFrame);
+    }
+
+    [TestMethod]
+    public void SelectingUltraLow_EnablesLatestFrameMode()
+    {
+        var vm = Create(out _);
+        vm.SelectPreset(RemoteStreamProfile.UltraLow);
+        Assert.AreEqual(RemoteStreamProfile.UltraLow, vm.Profile);
+        Assert.AreEqual("960x540", vm.Resolution);
+        Assert.IsTrue(vm.PreferLatestFrame);
     }
 
     [TestMethod]
@@ -41,6 +52,16 @@ public class SettingsViewModelTests
     }
 
     [TestMethod]
+    public void EditingLatencyMode_ChangesProfileToCustom()
+    {
+        var vm = Create(out _);
+        vm.SelectPreset(RemoteStreamProfile.Emergency);
+        vm.PreferLatestFrame = true;
+        Assert.AreEqual(RemoteStreamProfile.Custom, vm.Profile);
+        Assert.IsTrue(vm.PreferLatestFrame);
+    }
+
+    [TestMethod]
     public void RestoreDefaults_ReturnsToOriginal()
     {
         var vm = Create(out _);
@@ -50,6 +71,7 @@ public class SettingsViewModelTests
         Assert.AreEqual(80, vm.ImageQuality);
         Assert.IsNull(vm.MaxFps);
         Assert.AreEqual("Native", vm.Resolution);
+        Assert.IsFalse(vm.PreferLatestFrame);
         Assert.IsTrue(vm.UsesOriginalBehavior);
     }
 
@@ -74,9 +96,10 @@ public class SettingsViewModelTests
         vm.MaxFps = 10;
         vm.Resolution = "640x360";
         vm.EnableAudio = true;
+        vm.PreferLatestFrame = true;
         await vm.SaveAsync();
         Assert.AreEqual(
-            new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 55, 10, RemoteAudioMode.Original, 640, 360),
+            new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 55, 10, RemoteAudioMode.Original, 640, 360, true),
             store.Saved);
     }
 

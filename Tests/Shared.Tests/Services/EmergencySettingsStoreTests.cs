@@ -45,7 +45,7 @@ public class EmergencySettingsStoreTests
     }
 
     [TestMethod]
-    public void V1FileWithoutResolution_RemainsBackwardCompatible()
+    public void V1FileWithoutResolutionOrLatencyFlag_RemainsBackwardCompatible()
     {
         Directory.CreateDirectory(_directory);
         File.WriteAllText(_path, """
@@ -67,6 +67,7 @@ public class EmergencySettingsStoreTests
             settings);
         Assert.IsNull(settings.MaxStreamWidth);
         Assert.IsNull(settings.MaxStreamHeight);
+        Assert.IsFalse(settings.PreferLatestFrame);
         Assert.IsNull(warning);
     }
 
@@ -74,7 +75,7 @@ public class EmergencySettingsStoreTests
     public async Task ValidCustom_RoundTrips()
     {
         var store = new EmergencySettingsStore(_path);
-        var expected = new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 52, 9, RemoteAudioMode.Off, 960, 540);
+        var expected = new RemoteStreamSettings(1, RemoteStreamProfile.Custom, 52, 9, RemoteAudioMode.Off, 960, 540, true);
         await store.SaveAsync(expected, CancellationToken.None);
         var actual = store.Load(out var warning);
         Assert.AreEqual(expected, actual);
