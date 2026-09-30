@@ -13,4 +13,13 @@ public class BootstrapServiceTests
 
         Assert.IsNotNull(bootstrapType, "BootstrapService should exist before bootstrap behavior can be tested.");
     }
+
+    [TestMethod]
+    public void BootstrapServiceExposesEnsureBootstrapAdminAsync()
+    {
+        var method = typeof(BootstrapService).GetMethod("EnsureBootstrapAdminAsync");
+
+        Assert.IsNotNull(method, "BootstrapService should expose EnsureBootstrapAdminAsync for startup integration.");
+        Assert.AreEqual(typeof(Task), method.ReturnType);
+    }
 }
