@@ -1,0 +1,10 @@
+# Configure these in the CloudBase service environment. Do not put real secrets in this file.
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_HTTP_PORTS=5000
+Remotely_ApplicationOptions__DbProvider=SQLite
+Remotely_ConnectionStrings__SQLite=Data Source=/app/AppData/Remotely.db
+
+# Bootstrap values: all three must be configured together, or all three left unset.
+REMOTELY_BOOTSTRAP_EMAIL=
+REMOTELY_BOOTSTRAP_PASSWORD=
+REMOTELY_BOOTSTRAP_ORG_ID=
