@@ -41,6 +41,39 @@ public class BootstrapServiceTests
     }
 
     [TestMethod]
+    public void UppercaseCloudBaseEnvironmentVariablesMapThroughRemotelyPrefix()
+    {
+        const string emailVariable = "REMOTELY_BOOTSTRAP_EMAIL";
+        const string passwordVariable = "REMOTELY_BOOTSTRAP_PASSWORD";
+        const string organizationVariable = "REMOTELY_BOOTSTRAP_ORG_ID";
+
+        var previousEmail = Environment.GetEnvironmentVariable(emailVariable);
+        var previousPassword = Environment.GetEnvironmentVariable(passwordVariable);
+        var previousOrganization = Environment.GetEnvironmentVariable(organizationVariable);
+
+        try
+        {
+            Environment.SetEnvironmentVariable(emailVariable, BootstrapEmail);
+            Environment.SetEnvironmentVariable(passwordVariable, BootstrapPassword);
+            Environment.SetEnvironmentVariable(organizationVariable, BootstrapOrgId);
+
+            var configuration = new ConfigurationBuilder()
+                .AddEnvironmentVariables("Remotely_")
+                .Build();
+
+            Assert.AreEqual(BootstrapEmail, configuration["BOOTSTRAP_EMAIL"]);
+            Assert.AreEqual(BootstrapPassword, configuration["BOOTSTRAP_PASSWORD"]);
+            Assert.AreEqual(BootstrapOrgId, configuration["BOOTSTRAP_ORG_ID"]);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(emailVariable, previousEmail);
+            Environment.SetEnvironmentVariable(passwordVariable, previousPassword);
+            Environment.SetEnvironmentVariable(organizationVariable, previousOrganization);
+        }
+    }
+
+    [TestMethod]
     public async Task EmptyDatabaseWithCompleteConfigCreatesFixedAdminAndOrganization()
     {
         await using var provider = CreateProvider(CreateCompleteSettings());
