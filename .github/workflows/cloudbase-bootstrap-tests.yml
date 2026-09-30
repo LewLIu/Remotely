@@ -3,7 +3,7 @@ name: CloudBase Bootstrap Tests
 on:
   push:
     branches:
-      - feature/cloudbase-bootstrap
+      - feature/emergency-manager-low-bandwidth
   pull_request:
     branches:
       - feature/emergency-manager-low-bandwidth
