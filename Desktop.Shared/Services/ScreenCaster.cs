@@ -9,6 +9,7 @@ using Remotely.Shared.Services;
 using Microsoft.IO;
 using Bitbound.SimpleMessenger;
 using Remotely.Desktop.Shared.Messages;
+using System.Diagnostics;
 
 namespace Remotely.Desktop.Shared.Services;
 
@@ -74,15 +75,10 @@ internal class ScreenCaster : IScreenCaster
     {
         foreach (var registration in _messengerRegistrations)
         {
-            try
-            {
-                registration.Dispose();
-            }
-            catch { }
+            try { registration.Dispose(); } catch { }
         }
         _metricsCts.Cancel();
         _metricsCts.Dispose();
-
         GC.SuppressFinalize(this);
     }
 
@@ -94,27 +90,18 @@ internal class ScreenCaster : IScreenCaster
         {
             viewer.Name = screenCastRequest.RequesterName;
             viewer.ViewerConnectionId = screenCastRequest.ViewerId;
-
             var screenBounds = viewer.Capturer.CurrentScreenBounds;
 
             _logger.LogInformation(
-                "Starting screen cast.  Requester: {viewerName}. " +
-                "Viewer ID: {viewerViewerConnectionID}.  App Mode: {mode}",
+                "Starting screen cast.  Requester: {viewerName}. Viewer ID: {viewerViewerConnectionID}.  App Mode: {mode}",
                 viewer.Name,
                 viewer.ViewerConnectionId,
                 _appState.Mode);
 
             _appState.Viewers.AddOrUpdate(viewer.ViewerConnectionId, viewer, (id, v) => viewer);
 
-            if (_appState.Mode == AppMode.Attended)
-            {
-                _appState.InvokeViewerAdded(viewer);
-            }
-
-            if (_appState.Mode == AppMode.Unattended && screenCastRequest.NotifyUser)
-            {
-                _sessionIndicator.Show();
-            }
+            if (_appState.Mode == AppMode.Attended) _appState.InvokeViewerAdded(viewer);
+            if (_appState.Mode == AppMode.Unattended && screenCastRequest.NotifyUser) _sessionIndicator.Show();
 
             await viewer.SendScreenData(
                 viewer.Capturer.SelectedScreen,
@@ -123,7 +110,6 @@ internal class ScreenCaster : IScreenCaster
                 screenBounds.Height);
 
             await viewer.SendCursorChange(_cursorIconWatcher.GetCurrentCursor());
-
             await viewer.SendWindowsSessions();
 
             viewer.Capturer.ScreenChanged += async (sender, bounds) =>
@@ -146,12 +132,7 @@ internal class ScreenCaster : IScreenCaster
         finally
         {
             _logger.LogInformation(
-                "Ended desktop stream.  " +
-                "Requester: {viewerName}. " +
-                "Viewer ID: {viewerConnectionID}. " +
-                "Viewer Responsive: {isResponsive}.  " +
-                "Viewer Disconnected Requested: {viewerDisconnectRequested}. " +
-                "Windows Session Ending: {windowsSessionEnding}",
+                "Ended desktop stream.  Requester: {viewerName}. Viewer ID: {viewerConnectionID}. Viewer Responsive: {isResponsive}.  Viewer Disconnected Requested: {viewerDisconnectRequested}. Windows Session Ending: {windowsSessionEnding}",
                 viewer.Name,
                 viewer.ViewerConnectionId,
                 viewer.IsResponsive,
@@ -161,7 +142,6 @@ internal class ScreenCaster : IScreenCaster
             _appState.Viewers.TryRemove(viewer.ViewerConnectionId, out _);
             Disposer.TryDisposeAll(viewer);
 
-            // Close if no one is viewing.
             if (_appState.Viewers.IsEmpty && _appState.Mode == AppMode.Unattended)
             {
                 _logger.LogInformation("No more viewers.  Calling shutdown service.");
@@ -174,6 +154,12 @@ internal class ScreenCaster : IScreenCaster
     {
         await Task.Yield();
 
+        SKBitmap? previousScaledFrame = null;
+        var previousSourceSize = SKSizeI.Empty;
+        var previousStreamSize = SKSizeI.Empty;
+        var hasPreviousGeometry = false;
+        var diagnostics = new StreamDiagnosticsTracker(TimeProvider.System);
+
         try
         {
             while (!viewer.DisconnectRequested && viewer.IsResponsive && !_isWindowsSessionEnding)
@@ -182,66 +168,165 @@ internal class ScreenCaster : IScreenCaster
 
                 if (!await viewer.WaitForViewer())
                 {
-                    _logger.LogWarning(
-                        "Viewer is behind on frames and did not catch up in time.");
+                    _logger.LogWarning("Viewer is behind on frames and did not catch up in time.");
                 }
 
-                await _frameRateGate.WaitAsync(_streamSettingsProvider.Current.MaxFps);
+                var settings = _streamSettingsProvider.Current;
+                await _frameRateGate.WaitAsync(settings.MaxFps);
 
                 var result = viewer.Capturer.GetNextFrame();
-
                 if (!result.IsSuccess)
                 {
                     await Task.Yield();
                     continue;
                 }
 
-                var diffArea = viewer.Capturer.GetFrameDiffArea();
+                var sourceFrame = result.Value;
+                var sourceSize = new SKSizeI(sourceFrame.Width, sourceFrame.Height);
+                var streamSize = StreamResolutionPolicy.CalculateSize(
+                    sourceFrame.Width,
+                    sourceFrame.Height,
+                    settings.MaxStreamWidth,
+                    settings.MaxStreamHeight);
+                var scaled = streamSize.Width != sourceFrame.Width || streamSize.Height != sourceFrame.Height;
+                var geometryChanged = !hasPreviousGeometry ||
+                    sourceSize != previousSourceSize ||
+                    streamSize != previousStreamSize;
 
-                if (diffArea.IsEmpty)
+                SKBitmap? scaledFrame = null;
+                SKBitmap frameForTransport = sourceFrame;
+                SKRect diffArea;
+                SKRect destinationArea;
+
+                try
                 {
-                    await Task.Yield();
-                    continue;
+                    if (scaled)
+                    {
+                        scaledFrame = ResizeFrame(sourceFrame, streamSize);
+                        frameForTransport = scaledFrame;
+                        diffArea = _imageHelper.GetDiffArea(frameForTransport, previousScaledFrame, geometryChanged);
+
+                        previousScaledFrame?.Dispose();
+                        previousScaledFrame = frameForTransport.Copy();
+
+                        if (diffArea.IsEmpty)
+                        {
+                            viewer.Capturer.CaptureFullscreen = false;
+                            previousSourceSize = sourceSize;
+                            previousStreamSize = streamSize;
+                            hasPreviousGeometry = true;
+                            await Task.Yield();
+                            continue;
+                        }
+
+                        var mapped = StreamResolutionPolicy.MapToSource(
+                            ToRectI(diffArea),
+                            sourceFrame.Width,
+                            sourceFrame.Height,
+                            streamSize.Width,
+                            streamSize.Height);
+                        destinationArea = new SKRect(mapped.Left, mapped.Top, mapped.Right, mapped.Bottom);
+                    }
+                    else
+                    {
+                        previousScaledFrame?.Dispose();
+                        previousScaledFrame = null;
+
+                        diffArea = geometryChanged && hasPreviousGeometry
+                            ? new SKRect(0, 0, sourceFrame.Width, sourceFrame.Height)
+                            : viewer.Capturer.GetFrameDiffArea();
+                        destinationArea = diffArea;
+
+                        if (diffArea.IsEmpty)
+                        {
+                            viewer.Capturer.CaptureFullscreen = false;
+                            previousSourceSize = sourceSize;
+                            previousStreamSize = streamSize;
+                            hasPreviousGeometry = true;
+                            await Task.Yield();
+                            continue;
+                        }
+                    }
+
+                    viewer.Capturer.CaptureFullscreen = false;
+                    previousSourceSize = sourceSize;
+                    previousStreamSize = streamSize;
+                    hasPreviousGeometry = true;
+
+                    using var croppedFrame = _imageHelper.CropBitmap(frameForTransport, diffArea);
+                    var encodeStarted = Stopwatch.GetTimestamp();
+                    var encodedImageBytes = _imageHelper.EncodeBitmap(croppedFrame, SKEncodedImageFormat.Jpeg, viewer.ImageQuality);
+                    var encodeDuration = Stopwatch.GetElapsedTime(encodeStarted);
+
+                    if (encodedImageBytes.Length == 0) continue;
+
+                    viewer.IncrementFpsCount();
+                    viewer.AppendSentFrame(new SentFrame(encodedImageBytes.Length, _systemTime.Now));
+
+                    var snapshot = diagnostics.RecordFrame(
+                        sourceFrame.Width,
+                        sourceFrame.Height,
+                        streamSize.Width,
+                        streamSize.Height,
+                        encodedImageBytes.Length,
+                        encodeDuration);
+                    if (snapshot is not null)
+                    {
+                        _logger.LogInformation(
+                            "Stream diagnostics. Source: {sourceWidth}x{sourceHeight}. Stream: {streamWidth}x{streamHeight}. Actual FPS: {fps:F1}. Encoded: {kbps:F1} KB/s. Avg frame: {avgFrame:F1} KB. Avg JPEG encode: {encodeMs:F1} ms.",
+                            snapshot.SourceWidth,
+                            snapshot.SourceHeight,
+                            snapshot.StreamWidth,
+                            snapshot.StreamHeight,
+                            snapshot.ActualFps,
+                            snapshot.EncodedKBytesPerSecond,
+                            snapshot.AverageFrameKBytes,
+                            snapshot.AverageEncodeMilliseconds);
+                    }
+
+                    using var frameStream = _recycleStreams.GetStream();
+                    using var writer = new BinaryWriter(frameStream);
+                    writer.Write(encodedImageBytes.Length);
+                    writer.Write(destinationArea.Left);
+                    writer.Write(destinationArea.Top);
+                    writer.Write(destinationArea.Width);
+                    writer.Write(destinationArea.Height);
+                    writer.Write(DateTimeOffset.Now.ToUnixTimeMilliseconds());
+                    writer.Write(encodedImageBytes);
+                    frameStream.Seek(0, SeekOrigin.Begin);
+
+                    foreach (var chunk in frameStream.ToArray().Chunk(50_000))
+                    {
+                        yield return chunk;
+                    }
                 }
-
-                viewer.Capturer.CaptureFullscreen = false;
-
-                using var croppedFrame = _imageHelper.CropBitmap(result.Value, diffArea);
-
-                var encodedImageBytes = _imageHelper.EncodeBitmap(croppedFrame, SKEncodedImageFormat.Jpeg, viewer.ImageQuality);
-
-                if (encodedImageBytes.Length == 0)
+                finally
                 {
-                    continue;
-                }
-
-                viewer.IncrementFpsCount();
-                viewer.AppendSentFrame(new SentFrame(encodedImageBytes.Length, _systemTime.Now));
-
-                using var frameStream = _recycleStreams.GetStream();
-                using var writer = new BinaryWriter(frameStream);
-                writer.Write(encodedImageBytes.Length);
-                writer.Write(diffArea.Left);
-                writer.Write(diffArea.Top);
-                writer.Write(diffArea.Width);
-                writer.Write(diffArea.Height);
-                writer.Write(DateTimeOffset.Now.ToUnixTimeMilliseconds());
-                writer.Write(encodedImageBytes);
-
-                frameStream.Seek(0, SeekOrigin.Begin);
-
-                foreach (var chunk in frameStream.ToArray().Chunk(50_000))
-                {
-                    yield return chunk;
+                    scaledFrame?.Dispose();
                 }
             }
         }
         finally
         {
+            previousScaledFrame?.Dispose();
             sessionEndedSignal.Release();
         }
-
     }
+
+    private static SKBitmap ResizeFrame(SKBitmap source, SKSizeI targetSize)
+    {
+        var resized = source.Resize(
+            new SKImageInfo(targetSize.Width, targetSize.Height, source.ColorType, source.AlphaType),
+            SKFilterQuality.Medium);
+        return resized ?? throw new InvalidOperationException("Unable to resize desktop frame.");
+    }
+
+    private static SKRectI ToRectI(SKRect rect)
+        => new(
+            (int)Math.Floor(rect.Left),
+            (int)Math.Floor(rect.Top),
+            (int)Math.Ceiling(rect.Right),
+            (int)Math.Ceiling(rect.Bottom));
 
     private Task HandleWindowsSessionEndingMessage(object subscriber, WindowsSessionEndingMessage arg)
     {
@@ -271,15 +356,11 @@ internal class ScreenCaster : IScreenCaster
                 viewer.Capturer.IsGpuAccelerated);
 
             _logger.LogDebug(
-                "Current Mbps: {currentMbps}.  " +
-                "Current FPS: {currentFps}.  " +
-                "Roundtrip Latency: {roundTripLatency}ms.  " +
-                "Image Quality: {imageQuality}",
+                "Current Mbps: {currentMbps}. Current FPS: {currentFps}. Roundtrip Latency: {roundTripLatency}ms. Image Quality: {imageQuality}",
                 metrics.Mbps,
                 metrics.Fps,
                 metrics.RoundTripLatency,
                 viewer.ImageQuality);
-
 
             await viewer.SendSessionMetrics(metrics);
         }
