@@ -1,0 +1,22 @@
+name: CloudBase Bootstrap Tests
+
+on:
+  push:
+    branches:
+      - feature/cloudbase-bootstrap
+  pull_request:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+  workflow_dispatch:
+
+jobs:
+  server-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run Server.Tests
+        run: dotnet test Tests/Server.Tests/Server.Tests.csproj -c Release
