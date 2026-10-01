@@ -69,6 +69,33 @@ public class AgentRecoveryTests
         Assert.AreEqual(serverToken, storedDevice!.ServerVerificationToken);
     }
 
+    [TestMethod]
+    public async Task AddOrUpdateDevice_WhenExistingDeviceTokenIsMissing_DoesNotAcceptPresentedToken()
+    {
+        const string presentedAgentToken = "presented-agent-token";
+        var existingDevice = _testData.Org1Device1;
+
+        var before = (await _dataService.GetDevice(existingDevice.ID)).Value;
+        Assert.IsNotNull(before);
+        Assert.IsNull(before!.ServerVerificationToken);
+
+        var result = await _dataService.AddOrUpdateDevice(new DeviceClientDto
+        {
+            ID = existingDevice.ID,
+            OrganizationID = existingDevice.OrganizationID,
+            DeviceName = existingDevice.DeviceName ?? "Existing Device",
+            ServerVerificationToken = presentedAgentToken
+        });
+
+        Assert.IsTrue(result.IsSuccess);
+
+        var storedDevice = (await _dataService.GetDevice(existingDevice.ID)).Value;
+        Assert.IsNotNull(storedDevice);
+        Assert.IsNull(
+            storedDevice!.ServerVerificationToken,
+            "Only creation of a missing device record may seed the persisted Agent token.");
+    }
+
     [TestInitialize]
     public async Task TestInitialize()
     {
