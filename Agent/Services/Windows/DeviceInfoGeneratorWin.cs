@@ -13,10 +13,11 @@ public class DeviceInfoGeneratorWin : DeviceInfoGeneratorBase, IDeviceInformatio
     private readonly ICpuUtilizationSampler _cpuUtilSampler;
 
     public DeviceInfoGeneratorWin(
-        ICpuUtilizationSampler cpuUtilSampler, 
+        ICpuUtilizationSampler cpuUtilSampler,
+        IConfigService configService,
         ILogger<DeviceInfoGeneratorWin> logger)
-        : base(logger)
-    { 
+        : base(configService, logger)
+    {
         _cpuUtilSampler = cpuUtilSampler;
     }
 
