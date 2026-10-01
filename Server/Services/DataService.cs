@@ -365,6 +365,7 @@ public class DataService : IDataService
             {
                 OrganizationID = deviceDto.OrganizationID,
                 ID = deviceDto.ID,
+                ServerVerificationToken = deviceDto.ServerVerificationToken,
             };
             await dbContext.Devices.AddAsync(device);
         }
@@ -470,7 +471,7 @@ public class DataService : IDataService
                 var newDeviceGroups = await dbContext.DeviceGroups
                     .Where(x => deviceGroupIds.Contains(x.ID))
                     .ToListAsync();
-                existingSchedule.DeviceGroups.AddRange(newDeviceGroups);
+                existingSchedule.DeviceGroups.AddRange(newDevices);
             }
         }
 
@@ -1817,9 +1818,9 @@ public class DataService : IDataService
     {
         using var dbContext = _appDbFactory.GetContext();
 
-        var user = await dbContext.Users
+        var user = dbContext.Users
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.UserName == userName);
+            .FirstOrDefault(x => x.UserName == userName);
 
         if (user is null)
         {
