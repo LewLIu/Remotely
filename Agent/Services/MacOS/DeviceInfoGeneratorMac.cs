@@ -12,8 +12,11 @@ public class DeviceInfoGeneratorMac : DeviceInfoGeneratorBase, IDeviceInformatio
 {
     private readonly IProcessInvoker _processInvoker;
 
-    public DeviceInfoGeneratorMac(IProcessInvoker processInvoker, ILogger<DeviceInfoGeneratorMac> logger)
-        : base(logger)
+    public DeviceInfoGeneratorMac(
+        IProcessInvoker processInvoker,
+        IConfigService configService,
+        ILogger<DeviceInfoGeneratorMac> logger)
+        : base(configService, logger)
     {
         _processInvoker = processInvoker;
     }
