@@ -14,15 +14,24 @@ namespace Remotely.Agent.Services;
 
 public abstract class DeviceInfoGeneratorBase
 {
+    private readonly IConfigService _configService;
     protected readonly ILogger<DeviceInfoGeneratorBase> _logger;
 
-    public DeviceInfoGeneratorBase(ILogger<DeviceInfoGeneratorBase> logger) 
+    public DeviceInfoGeneratorBase(
+        IConfigService configService,
+        ILogger<DeviceInfoGeneratorBase> logger)
     {
+        _configService = configService;
         _logger = logger;
     }
 
     protected DeviceClientDto GetDeviceBase(string deviceID, string orgID)
     {
+        var connectionInfo = _configService.GetConnectionInfo();
+        var verificationToken =
+            connectionInfo.DeviceID == deviceID && connectionInfo.OrganizationID == orgID
+                ? connectionInfo.ServerVerificationToken
+                : null;
 
         return new DeviceClientDto()
         {
@@ -36,8 +45,9 @@ public abstract class DeviceInfoGeneratorBase
             IsOnline = true,
             MacAddresses = GetMacAddresses().ToArray(),
             OrganizationID = orgID,
+            ServerVerificationToken = verificationToken,
             AgentVersion = AppVersionHelper.GetAppVersion()
-    };
+        };
     }
 
     protected (double usedStorage, double totalStorage) GetSystemDriveInfo()
