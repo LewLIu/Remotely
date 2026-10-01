@@ -1,9 +1,15 @@
 ﻿import { ViewerApp } from "./App.js";
+import { FindFreshestSafeFrameStart, FrameGeometry } from "./FrameBufferPolicy.js";
 import { StreamingState } from "./Models/StreamingState.js";
 import { Screen2DContext } from "./UI.js";
 import { GetUint64 } from "./Utilities.js";
 
 const FrameHeaderSize = 28;
+
+interface CompleteFrame extends FrameGeometry {
+    imageBlob: Blob;
+    timestamp: number;
+}
 
 
 export async function ProcessStream(streamingState: StreamingState): Promise<void> {
@@ -16,42 +22,78 @@ export async function ProcessStream(streamingState: StreamingState): Promise<voi
         streamingState.Buffer = new Blob([streamingState.Buffer, ...chunks]);
 
         const bufferSize = streamingState.Buffer.size;
-
         if (bufferSize < FrameHeaderSize) {
             return;
         }
 
-        const headerBlob = streamingState.Buffer.slice(0, FrameHeaderSize);
-        const buffer = await headerBlob.arrayBuffer();
+        const completeFrames: CompleteFrame[] = [];
+        let consumedBytes = 0;
 
-        const dataView = new DataView(buffer);
-        const imageSize = dataView.getInt32(0, true);
+        while (bufferSize - consumedBytes >= FrameHeaderSize) {
+            const headerStart = consumedBytes;
+            const headerEnd = headerStart + FrameHeaderSize;
+            const headerBlob = streamingState.Buffer.slice(headerStart, headerEnd);
+            const headerBuffer = await headerBlob.arrayBuffer();
+            const dataView = new DataView(headerBuffer);
+            const imageSize = dataView.getInt32(0, true);
 
-        if (bufferSize - FrameHeaderSize < imageSize) {
+            if (imageSize <= 0) {
+                throw new Error(`Invalid desktop frame size: ${imageSize}.`);
+            }
+
+            const frameEnd = headerEnd + imageSize;
+            if (frameEnd > bufferSize) {
+                break;
+            }
+
+            completeFrames.push({
+                imageX: dataView.getFloat32(4, true),
+                imageY: dataView.getFloat32(8, true),
+                imageWidth: dataView.getFloat32(12, true),
+                imageHeight: dataView.getFloat32(16, true),
+                timestamp: GetUint64(dataView, 20, true),
+                imageBlob: streamingState.Buffer.slice(headerEnd, frameEnd)
+            });
+
+            consumedBytes = frameEnd;
+        }
+
+        if (completeFrames.length === 0) {
             return;
         }
 
-        const imageX = dataView.getFloat32(4, true);
-        const imageY = dataView.getFloat32(8, true);
-        const imageWidth = dataView.getFloat32(12, true);
-        const imageHeight = dataView.getFloat32(16, true);
-        const timestamp = GetUint64(dataView, 20, true);
+        // Preserve only the incomplete tail. Newly arriving chunks are kept in
+        // ReceivedChunks and will be appended on the next animation frame.
+        streamingState.Buffer = streamingState.Buffer.slice(consumedBytes);
 
-        const imageBlob = streamingState.Buffer.slice(FrameHeaderSize, FrameHeaderSize + imageSize);
+        const renderStart = FindFreshestSafeFrameStart(
+            completeFrames,
+            Screen2DContext.canvas.width,
+            Screen2DContext.canvas.height);
 
-        const bitmap = await createImageBitmap(imageBlob);
+        let newestRenderedTimestamp: number = null;
+        for (let i = renderStart; i < completeFrames.length; i++) {
+            const frame = completeFrames[i];
+            const bitmap = await createImageBitmap(frame.imageBlob);
+            try {
+                Screen2DContext.drawImage(
+                    bitmap,
+                    frame.imageX,
+                    frame.imageY,
+                    frame.imageWidth,
+                    frame.imageHeight);
+                newestRenderedTimestamp = frame.timestamp;
+            }
+            finally {
+                bitmap.close();
+            }
+        }
 
-        Screen2DContext.drawImage(bitmap,
-            imageX,
-            imageY,
-            imageWidth,
-            imageHeight);
-
-        bitmap.close();
-
-        streamingState.Buffer = streamingState.Buffer.slice(FrameHeaderSize + imageSize);
-
-        ViewerApp.MessageSender.SendFrameReceived(timestamp);
+        if (newestRenderedTimestamp !== null) {
+            // Frame acknowledgements are themselves coalesced by MessageSender,
+            // so a slow LongPolling uplink never queues one ACK per stale frame.
+            void ViewerApp.MessageSender.SendFrameReceived(newestRenderedTimestamp);
+        }
     }
     catch (ex) {
         console.error("Capture processing error.  Resetting stream buffer.", ex);

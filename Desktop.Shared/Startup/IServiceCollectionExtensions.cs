@@ -1,3 +1,4 @@
+using Remotely.Desktop.Shared.Abstractions;
 using Remotely.Desktop.Shared.Services;
 using Remotely.Shared.Services;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -28,6 +29,9 @@ public static class IServiceCollectionExtensions
         services.AddSingleton<IBrandingProvider, BrandingProvider>();
         services.AddSingleton<IAppState, AppState>();
         services.AddSingleton<IViewerFactory, ViewerFactory>();
+        services.AddSingleton<IRemoteStreamSettingsProvider, OriginalRemoteStreamSettingsProvider>();
+        services.AddSingleton<IAudioPolicyController, AudioPolicyController>();
+        services.AddTransient<FrameRateGate>();
         services.AddTransient<IScreenCaster, ScreenCaster>();
         services.AddTransient<IHubConnectionBuilder>(s => new HubConnectionBuilder());
     }

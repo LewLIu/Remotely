@@ -28,6 +28,7 @@ public static class IServiceCollectionExtensions
         services.AddSingleton<IShutdownService, ShutdownServiceWin>();
         services.AddSingleton<IMessageLoop, MessageLoop>();
         services.AddSingleton<IAppStartup, AppStartup>();
+        services.AddSingleton<IRemoteStreamSettingsProvider, EmergencySettingsProviderWin>();
         services.AddTransient<IFileTransferService, FileTransferServiceWin>();
         services.AddTransient<IScreenCapturer, ScreenCapturerWin>();
     }

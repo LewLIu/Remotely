@@ -1,0 +1,96 @@
+name: Validate Emergency Manager Package
+
+on:
+  push:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+    paths:
+      - .github/workflows/validate-emergency-package.yml
+      - Shared/**
+      - Desktop.Shared/**
+      - Desktop.Native/**
+      - Desktop.UI/**
+      - Desktop.Win/**
+      - Agent/**
+      - Manager.Win/**
+      - Tests/**
+      - Utilities/Publish.ps1
+      - Server/wwwroot/Content/Install-Remotely.ps1
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Final automated tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet test Tests/Shared.Tests/Shared.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Shared tests failed.' }
+          dotnet test Tests/Desktop.Win.Tests/Desktop.Win.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop.Win tests failed.' }
+          dotnet test Tests/Manager.Win.Tests/Manager.Win.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Manager.Win tests failed.' }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Tests/Installer.Tests.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Installer tests failed.' }
+      - name: Build changed client projects
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $projects = @(
+            'Shared/Shared.csproj',
+            'Desktop.Win/Desktop.Win.csproj',
+            'Agent/Agent.csproj',
+            'Manager.Win/Manager.Win.csproj'
+          )
+          foreach ($project in $projects) {
+            dotnet build $project -c Release
+            if ($LASTEXITCODE -ne 0) { throw "Build failed: $project" }
+          }
+      - name: Publish Windows packages with repository script
+        shell: pwsh
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1 -CurrentVersion '2026.09.30.0000'
+          if ($LASTEXITCODE -ne 0) { throw 'Publish.ps1 failed.' }
+      - name: Verify package contents
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = 'Server/wwwroot/Content/Remotely-Win-x64.zip'
+          if (-not (Test-Path $zip)) { throw "Missing package: $zip" }
+          $extract = Join-Path $env:RUNNER_TEMP 'remotely-x64-check'
+          Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $required = @(
+            'Remotely_Agent.exe',
+            'Desktop\Remotely_Desktop.exe',
+            'Manager\Remotely_Manager.exe'
+          )
+          foreach ($relative in $required) {
+            $full = Join-Path $extract $relative
+            if (-not (Test-Path $full)) { throw "Package missing required file: $relative" }
+            Write-Host "Verified $relative"
+          }
+          $x86 = 'Server/wwwroot/Content/Remotely-Win-x86.zip'
+          if (-not (Test-Path $x86)) { throw "Missing package: $x86" }
+          $x86Extract = Join-Path $env:RUNNER_TEMP 'remotely-x86-check'
+          Remove-Item $x86Extract -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -Path $x86 -DestinationPath $x86Extract -Force
+          if (-not (Test-Path (Join-Path $x86Extract 'Manager\Remotely_Manager.exe'))) {
+            throw 'x86 package missing Manager\Remotely_Manager.exe'
+          }
+      - name: Upload x64 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: remotely-emergency-win-x64
+          path: Server/wwwroot/Content/Remotely-Win-x64.zip
+          if-no-files-found: error
+          retention-days: 30

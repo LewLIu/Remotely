@@ -1,0 +1,75 @@
+name: Browser Low Latency Tests
+
+on:
+  push:
+    branches:
+      - feature/emergency-manager-low-bandwidth
+    paths:
+      - Server/wwwroot/src/**
+      - .github/browser-tests/**
+      - .github/workflows/browser-low-latency-tests.yml
+  workflow_dispatch:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Type-check changed browser source
+        run: |
+          npx --yes -p typescript@5.6.2 tsc \
+            --target ES2020 \
+            --module ES2020 \
+            --moduleResolution node \
+            --lib DOM,ES2020 \
+            --skipLibCheck \
+            --noEmit \
+            Server/wwwroot/src/CaptureProcessor.ts \
+            Server/wwwroot/src/MessageSender.ts
+      - name: Compile browser policy tests
+        run: |
+          rm -rf browser-test-out
+          npx --yes -p typescript@5.6.2 tsc \
+            --target ES2020 \
+            --module commonjs \
+            --moduleResolution node \
+            --lib DOM,ES2020 \
+            --skipLibCheck \
+            --rootDir . \
+            --outDir browser-test-out \
+            Server/wwwroot/src/FrameBufferPolicy.ts \
+            .github/browser-tests/FrameBufferPolicyTests.ts
+      - name: Run browser policy tests
+        run: node browser-test-out/.github/browser-tests/FrameBufferPolicyTests.js
+      - name: Build browser overlay
+        run: |
+          rm -rf browser-build browser-overlay
+          npx --yes -p typescript@5.6.2 tsc \
+            --target ES2020 \
+            --module ES2020 \
+            --moduleResolution node \
+            --lib DOM,ES2020 \
+            --skipLibCheck \
+            --rootDir Server/wwwroot/src \
+            --outDir browser-build \
+            Server/wwwroot/src/CaptureProcessor.ts \
+            Server/wwwroot/src/MessageSender.ts \
+            Server/wwwroot/src/FrameBufferPolicy.ts
+          mkdir -p browser-overlay
+          cp browser-build/CaptureProcessor.js browser-overlay/CaptureProcessor.js
+          cp browser-build/MessageSender.js browser-overlay/MessageSender.js
+          cp browser-build/FrameBufferPolicy.js browser-overlay/FrameBufferPolicy.js
+          test -s browser-overlay/CaptureProcessor.js
+          test -s browser-overlay/MessageSender.js
+          test -s browser-overlay/FrameBufferPolicy.js
+      - name: Upload browser overlay
+        uses: actions/upload-artifact@v4
+        with:
+          name: remotely-browser-low-latency-overlay
+          path: browser-overlay/*.js
+          if-no-files-found: error
+          retention-days: 30

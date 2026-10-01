@@ -225,6 +225,7 @@ else
 }
 services.AddSingleton<IAppDbFactory, AppDbFactory>();
 services.AddTransient<IDataService, DataService>();
+services.AddScoped<BootstrapService>();
 services.AddScoped<ApiAuthorizationFilter>();
 services.AddScoped<LocalOnlyFilter>();
 services.AddScoped<ExpiringTokenFilter>();
@@ -317,8 +318,10 @@ app.MapAdditionalIdentityEndpoints();
 
 using (var scope = app.Services.CreateScope())
 {
+    var bootstrapService = scope.ServiceProvider.GetRequiredService<BootstrapService>();
     var dataService = scope.ServiceProvider.GetRequiredService<IDataService>();
 
+    await bootstrapService.EnsureBootstrapAdminAsync();
     await dataService.SetAllDevicesNotOnline();
     await dataService.CleanupOldRecords();
 }

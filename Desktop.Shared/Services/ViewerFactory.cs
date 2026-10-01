@@ -26,6 +26,7 @@ internal class ViewerFactory : IViewerFactory
         var clipboardService = _serviceProvider.GetRequiredService<IClipboardService>();
         var audioCapturer = _serviceProvider.GetRequiredService<IAudioCapturer>();
         var systemTime = _serviceProvider.GetRequiredService<ISystemTime>();
+        var streamSettingsProvider = _serviceProvider.GetRequiredService<IRemoteStreamSettingsProvider>();
         var logger = _serviceProvider.GetRequiredService<ILogger<Viewer>>();
 
         return new Viewer(
@@ -36,6 +37,7 @@ internal class ViewerFactory : IViewerFactory
             clipboardService,
             audioCapturer,
             systemTime,
+            streamSettingsProvider,
             logger);
     }
 }
