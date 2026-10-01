@@ -471,7 +471,7 @@ public class DataService : IDataService
                 var newDeviceGroups = await dbContext.DeviceGroups
                     .Where(x => deviceGroupIds.Contains(x.ID))
                     .ToListAsync();
-                existingSchedule.DeviceGroups.AddRange(newDevices);
+                existingSchedule.DeviceGroups.AddRange(newDeviceGroups);
             }
         }
 
@@ -1818,9 +1818,9 @@ public class DataService : IDataService
     {
         using var dbContext = _appDbFactory.GetContext();
 
-        var user = dbContext.Users
+        var user = await dbContext.Users
             .AsNoTracking()
-            .FirstOrDefault(x => x.UserName == userName);
+            .FirstOrDefaultAsync(x => x.UserName == userName);
 
         if (user is null)
         {
