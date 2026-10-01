@@ -151,6 +151,7 @@ public class AgentHubConnection : IAgentHubConnection, IDisposable
                 _logger.LogInformation("Connected to server.");
 
                 var device = await _deviceInfoService.CreateDevice(_connectionInfo.DeviceID, _connectionInfo.OrganizationID);
+                device.ServerVerificationToken = _connectionInfo.ServerVerificationToken;
 
                 var result = await _hubConnection.InvokeAsync<bool>("DeviceCameOnline", device);
 
@@ -585,6 +586,7 @@ public class AgentHubConnection : IAgentHubConnection, IDisposable
         await _updater.CheckForUpdates();
 
         var device = await _deviceInfoService.CreateDevice(_connectionInfo.DeviceID, $"{_connectionInfo.OrganizationID}");
+        device.ServerVerificationToken = _connectionInfo.ServerVerificationToken;
 
         if (!await _hubConnection.InvokeAsync<bool>("DeviceCameOnline", device))
         {
