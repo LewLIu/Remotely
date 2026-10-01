@@ -14,10 +14,11 @@ public class DeviceInfoGeneratorLinux : DeviceInfoGeneratorBase, IDeviceInformat
     private readonly ICpuUtilizationSampler _cpuUtilSampler;
 
     public DeviceInfoGeneratorLinux(
-        IProcessInvoker processInvoker, 
+        IProcessInvoker processInvoker,
         ICpuUtilizationSampler cpuUtilSampler,
+        IConfigService configService,
         ILogger<DeviceInfoGeneratorLinux> logger)
-        : base(logger)
+        : base(configService, logger)
     {
         _processInvoker = processInvoker;
         _cpuUtilSampler = cpuUtilSampler;
