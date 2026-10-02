@@ -53,6 +53,9 @@ public class DeviceClientDto
     public string PublicIP { get; set; } = string.Empty;
 
     [DataMember]
+    public string? ServerVerificationToken { get; set; }
+
+    [DataMember]
     public double TotalMemory { get; set; }
 
     [DataMember]

@@ -365,6 +365,7 @@ public class DataService : IDataService
             {
                 OrganizationID = deviceDto.OrganizationID,
                 ID = deviceDto.ID,
+                ServerVerificationToken = deviceDto.ServerVerificationToken,
             };
             await dbContext.Devices.AddAsync(device);
         }
