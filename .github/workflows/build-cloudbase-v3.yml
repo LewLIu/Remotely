@@ -3,7 +3,7 @@ name: Build V3 CloudBase Server
 on:
   push:
     branches:
-      - feature/emergency-manager-low-bandwidth
+      - master
     paths:
       - Server/**
       - Shared/**
@@ -13,7 +13,7 @@ on:
       - .github/workflows/build-cloudbase-v3.yml
   pull_request:
     branches:
-      - feature/emergency-manager-low-bandwidth
+      - master
     paths:
       - Server/**
       - Shared/**
@@ -47,17 +47,7 @@ jobs:
       - name: Compile V3 browser low-latency modules
         run: |
           rm -rf browser-build
-          npx --yes -p typescript@5.6.2 tsc \
-            --target ES2020 \
-            --module ES2020 \
-            --moduleResolution node \
-            --lib DOM,ES2020 \
-            --skipLibCheck \
-            --rootDir Server/wwwroot/src \
-            --outDir browser-build \
-            Server/wwwroot/src/CaptureProcessor.ts \
-            Server/wwwroot/src/MessageSender.ts \
-            Server/wwwroot/src/FrameBufferPolicy.ts
+          npx --yes -p typescript@5.6.2 tsc             --target ES2020             --module ES2020             --moduleResolution node             --lib DOM,ES2020             --skipLibCheck             --rootDir Server/wwwroot/src             --outDir browser-build             Server/wwwroot/src/CaptureProcessor.ts             Server/wwwroot/src/MessageSender.ts             Server/wwwroot/src/FrameBufferPolicy.ts
           cp browser-build/CaptureProcessor.js Server/wwwroot/src/CaptureProcessor.js
           cp browser-build/MessageSender.js Server/wwwroot/src/MessageSender.js
           cp browser-build/FrameBufferPolicy.js Server/wwwroot/src/FrameBufferPolicy.js
@@ -66,10 +56,7 @@ jobs:
         run: |
           rm -rf cloudbase-v3
           mkdir -p cloudbase-v3/publish
-          dotnet publish Server/Server.csproj \
-            -c Release \
-            --no-self-contained \
-            -o cloudbase-v3/publish
+          dotnet publish Server/Server.csproj             -c Release             --no-self-contained             -o cloudbase-v3/publish
 
       - name: Verify Bootstrap and V3 browser payload
         run: |
@@ -127,12 +114,7 @@ jobs:
           printf 'commit=%s\n' "$GITHUB_SHA" > cloudbase-v3/BUILD_INFO.txt
           (
             cd cloudbase-v3
-            sha256sum \
-              publish/Remotely_Server.dll \
-              publish/wwwroot/src/CaptureProcessor.js \
-              publish/wwwroot/src/MessageSender.js \
-              publish/wwwroot/src/FrameBufferPolicy.js \
-              > SHA256SUMS.txt
+            sha256sum               publish/Remotely_Server.dll               publish/wwwroot/src/CaptureProcessor.js               publish/wwwroot/src/MessageSender.js               publish/wwwroot/src/FrameBufferPolicy.js               > SHA256SUMS.txt
           )
 
       - name: Build and smoke test CloudBase container twice
@@ -154,15 +136,7 @@ jobs:
             local host_port="$2"
             local container_logs
 
-            docker run -d \
-              --name "$name" \
-              -p "${host_port}:5000" \
-              -e Remotely_ApplicationOptions__DbProvider=SQLite \
-              -e "Remotely_ConnectionStrings__SQLite=Data Source=/app/AppData/Remotely.db" \
-              -e REMOTELY_BOOTSTRAP_EMAIL=ci-docker-bootstrap@example.test \
-              -e "REMOTELY_BOOTSTRAP_PASSWORD=${password}" \
-              -e REMOTELY_BOOTSTRAP_ORG_ID=ci-docker-fixed-org \
-              "$image_name" > /dev/null
+            docker run -d               --name "$name"               -p "${host_port}:5000"               -e Remotely_ApplicationOptions__DbProvider=SQLite               -e "Remotely_ConnectionStrings__SQLite=Data Source=/app/AppData/Remotely.db"               -e REMOTELY_BOOTSTRAP_EMAIL=ci-docker-bootstrap@example.test               -e "REMOTELY_BOOTSTRAP_PASSWORD=${password}"               -e REMOTELY_BOOTSTRAP_ORG_ID=ci-docker-fixed-org               "$image_name" > /dev/null
 
             for attempt in {1..30}; do
               if curl -sS -o /dev/null "http://127.0.0.1:${host_port}/"; then
@@ -187,8 +161,6 @@ jobs:
             exit 1
           }
 
-          # Each container starts without a volume, so both runs begin from a fresh SQLite database.
-          # This verifies that the same Bootstrap identity can recreate itself after an ephemeral reset.
           run_fresh_container remotely-v3-cloudbase-first 5100
           run_fresh_container remotely-v3-cloudbase-second 5101
 
