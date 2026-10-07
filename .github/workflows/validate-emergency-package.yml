@@ -3,7 +3,7 @@ name: Validate Emergency Manager Package
 on:
   push:
     branches:
-      - feature/emergency-manager-low-bandwidth
+      - master
     paths:
       - .github/workflows/validate-emergency-package.yml
       - Shared/**
