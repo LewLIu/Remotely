@@ -7,6 +7,13 @@ on:
     paths:
       - Server/**
       - Shared/**
+      - Agent/**
+      - Desktop.Shared/**
+      - Desktop.Native/**
+      - Desktop.UI/**
+      - Desktop.Win/**
+      - Manager.Win/**
+      - Utilities/Publish.ps1
       - Tests/Server.Tests/**
       - deploy/cloudbase-v3/**
       - docs/cloudbase-bootstrap.md
@@ -17,6 +24,13 @@ on:
     paths:
       - Server/**
       - Shared/**
+      - Agent/**
+      - Desktop.Shared/**
+      - Desktop.Native/**
+      - Desktop.UI/**
+      - Desktop.Win/**
+      - Manager.Win/**
+      - Utilities/Publish.ps1
       - Tests/Server.Tests/**
       - deploy/cloudbase-v3/**
       - docs/cloudbase-bootstrap.md
@@ -24,11 +38,61 @@ on:
   workflow_dispatch:
 
 jobs:
+  build-client-downloads:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish client download payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Publish.ps1 failed.' }
+
+      - name: Verify resident-agent packages
+        shell: pwsh
+        run: |
+          $required = @(
+            'Server/wwwroot/Content/Remotely-Win-x64.zip',
+            'Server/wwwroot/Content/Remotely-Win-x86.zip'
+          )
+          foreach ($file in $required) {
+            if (-not (Test-Path $file)) { throw "Missing client package: $file" }
+          }
+
+      - name: Upload client download payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudbase-client-downloads
+          path: Server/wwwroot/Content/
+          if-no-files-found: error
+          retention-days: 1
+
   build-cloudbase-server:
+    needs: build-client-downloads
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      - name: Download client payload for CloudBase
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudbase-client-downloads
+          path: Server/wwwroot/Content
+
+      - name: Verify client payload before server publish
+        run: |
+          test -s Server/wwwroot/Content/Remotely-Win-x64.zip
+          test -s Server/wwwroot/Content/Remotely-Win-x86.zip
 
       - uses: actions/setup-dotnet@v4
         with:
@@ -77,6 +141,8 @@ jobs:
           test -s cloudbase-v3/publish/wwwroot/src/CaptureProcessor.js
           test -s cloudbase-v3/publish/wwwroot/src/MessageSender.js
           test -s cloudbase-v3/publish/wwwroot/src/FrameBufferPolicy.js
+          test -s cloudbase-v3/publish/wwwroot/Content/Remotely-Win-x64.zip
+          test -s cloudbase-v3/publish/wwwroot/Content/Remotely-Win-x86.zip
           grep -q "FindFreshestSafeFrameStart" cloudbase-v3/publish/wwwroot/src/CaptureProcessor.js
           grep -q "FlushMouseMoves" cloudbase-v3/publish/wwwroot/src/MessageSender.js
           grep -q "FlushFrameReceived" cloudbase-v3/publish/wwwroot/src/MessageSender.js
@@ -132,6 +198,8 @@ jobs:
               publish/wwwroot/src/CaptureProcessor.js \
               publish/wwwroot/src/MessageSender.js \
               publish/wwwroot/src/FrameBufferPolicy.js \
+              publish/wwwroot/Content/Remotely-Win-x64.zip \
+              publish/wwwroot/Content/Remotely-Win-x86.zip \
               > SHA256SUMS.txt
           )
 
