@@ -10,6 +10,7 @@ on:
       - Tests/Server.Tests/**
       - deploy/cloudbase-v3/**
       - docs/cloudbase-bootstrap.md
+      - VERSION
       - .github/workflows/build-cloudbase-v3.yml
   pull_request:
     branches:
@@ -20,6 +21,7 @@ on:
       - Tests/Server.Tests/**
       - deploy/cloudbase-v3/**
       - docs/cloudbase-bootstrap.md
+      - VERSION
       - .github/workflows/build-cloudbase-v3.yml
   workflow_dispatch:
 
@@ -124,7 +126,7 @@ jobs:
           cp deploy/cloudbase-v3/Dockerfile cloudbase-v3/Dockerfile
           cp deploy/cloudbase-v3/environment.example cloudbase-v3/environment.example
           cp docs/cloudbase-bootstrap.md cloudbase-v3/README.md
-          printf 'commit=%s\n' "$GITHUB_SHA" > cloudbase-v3/BUILD_INFO.txt
+          printf 'version=%s\ncommit=%s\n' "$(tr -d '\r\n' < VERSION)" "$GITHUB_SHA" > cloudbase-v3/BUILD_INFO.txt
           (
             cd cloudbase-v3
             sha256sum \
