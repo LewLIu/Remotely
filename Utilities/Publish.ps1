@@ -30,15 +30,28 @@ $Root = (Get-Item -Path $PSScriptRoot).Parent.FullName
 $SignAssemblies = $false
 
 if (!$CurrentVersion) {
-    Push-Location -Path $Root
+    $VersionFile = Join-Path $Root "VERSION"
 
-    $VersionString = git show -s --format=%ci
-    $VersionDate = [DateTimeOffset]::Parse($VersionString)
+    if (Test-Path -LiteralPath $VersionFile -PathType Leaf) {
+        $CurrentVersion = (Get-Content -LiteralPath $VersionFile -Raw).Trim()
+    }
+    else {
+        Push-Location -Path $Root
 
-    $CurrentVersion = $VersionDate.ToString("yyyy.MM.dd.HHmm")
+        $VersionString = git show -s --format=%ci
+        $VersionDate = [DateTimeOffset]::Parse($VersionString)
 
-    Pop-Location
+        $CurrentVersion = $VersionDate.ToString("yyyy.MM.dd.HHmm")
+
+        Pop-Location
+    }
 }
+
+if ($CurrentVersion -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+    throw "CurrentVersion must be a four-part numeric version (for example 1.0.0.0). Value: $CurrentVersion"
+}
+
+Write-Host "Publishing Remotely version $CurrentVersion"
 
 if ($CertificatePath.Length -gt 0 -and 
     (Test-Path -Path $CertificatePath) -eq $true -and 
