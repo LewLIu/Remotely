@@ -168,7 +168,7 @@ function Install-Remotely {
 
 	if ($Path) {
 		Write-Log "Copying install files..."
-		Copy-Item -Path $Path -Destination "$env:TEMP\Remotely-Win-$Platform.zip"
+		Copy-Item -LiteralPath $Path -Destination "$env:TEMP\Remotely-Win-$Platform.zip" -Force
 
 	}
 	else {
