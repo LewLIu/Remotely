@@ -123,10 +123,21 @@ function Uninstall-Remotely {
 }
 
 function Install-Remotely {
-	$HeadResponse = Invoke-WebRequest -Uri "$HostName/Content/Remotely-Win-$Platform.zip" -Method Head -UseBasicParsing
-	$ETag = $HeadResponse.Headers["ETag"]
-	if (!$Etag) {
-		Write-Log "Failed to get ETag from server.  Aborting install."
+	$ETag = $null
+
+	if ($Path) {
+		if (!(Test-Path -LiteralPath $Path -PathType Leaf)) {
+			Write-Log "Local client package was not found: $Path"
+			Do-Exit
+		}
+	}
+	else {
+		$HeadResponse = Invoke-WebRequest -Uri "$HostName/Content/Remotely-Win-$Platform.zip" -Method Head -UseBasicParsing
+		$ETag = $HeadResponse.Headers["ETag"]
+		if (!$ETag) {
+			Write-Log "Failed to get ETag from server.  Aborting install."
+			Do-Exit
+		}
 	}
 
 	if ((Test-Path -Path "$InstallPath") -and (Test-Path -Path "$InstallPath\ConnectionInfo.json")) {
@@ -157,7 +168,7 @@ function Install-Remotely {
 
 	if ($Path) {
 		Write-Log "Copying install files..."
-		Copy-Item -Path $Path -Destination "$env:TEMP\Remotely-Win-$Platform.zip"
+		Copy-Item -LiteralPath $Path -Destination "$env:TEMP\Remotely-Win-$Platform.zip" -Force
 
 	}
 	else {
@@ -179,7 +190,9 @@ function Install-Remotely {
 
 	New-Item -ItemType File -Path "$InstallPath\ConnectionInfo.json" -Value (ConvertTo-Json -InputObject $ConnectionInfo) -Force
 
-	New-Item -ItemType File -Path "$InstallPath\etag.txt" -Value $ETag -Force
+	if ($ETag) {
+		New-Item -ItemType File -Path "$InstallPath\etag.txt" -Value $ETag -Force
+	}
 
 	if ($DeviceAlias -or $DeviceGroup) {
 		$DeviceSetupOptions = @{
