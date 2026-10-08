@@ -6,6 +6,23 @@ on:
       - master
     paths:
       - .github/workflows/validate-emergency-package.yml
+      - VERSION
+      - Shared/**
+      - Desktop.Shared/**
+      - Desktop.Native/**
+      - Desktop.UI/**
+      - Desktop.Win/**
+      - Agent/**
+      - Manager.Win/**
+      - Tests/**
+      - Utilities/Publish.ps1
+      - Server/wwwroot/Content/Install-Remotely.ps1
+  pull_request:
+    branches:
+      - master
+    paths:
+      - .github/workflows/validate-emergency-package.yml
+      - VERSION
       - Shared/**
       - Desktop.Shared/**
       - Desktop.Native/**
@@ -58,7 +75,9 @@ jobs:
       - name: Publish Windows packages with repository script
         shell: pwsh
         run: |
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1 -CurrentVersion '2026.09.30.0000'
+          $version = (Get-Content -LiteralPath VERSION -Raw).Trim()
+          Write-Host "Packaging Remotely version $version"
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File Utilities/Publish.ps1 -CurrentVersion $version
           if ($LASTEXITCODE -ne 0) { throw 'Publish.ps1 failed.' }
       - name: Verify package contents
         shell: pwsh
