@@ -15,10 +15,19 @@ if ($Content -match 'Start-Service\s+-Name\s+Remotely_Service') {
 if ($Content -notmatch 'Where-Object\s*\{\s*\$_\.Name\s+-notlike\s+"ConnectionInfo\.json"\s*\}') {
     $Failures += 'Installer update flow must preserve ConnectionInfo.json.'
 }
+if ($Content -notmatch '(?s)if\s*\(\$Path\).*?else\s*\{.*?Invoke-WebRequest\s+-Uri\s+"\$HostName/Content/Remotely-Win-\$Platform\.zip"\s+-Method\s+Head') {
+    $Failures += 'Local -Path installs must bypass the remote package HEAD request.'
+}
+if ($Content -notmatch 'Test-Path\s+-LiteralPath\s+\$Path\s+-PathType\s+Leaf') {
+    $Failures += 'Local -Path installs must validate that the package file exists.'
+}
+if ($Content -notmatch 'Copy-Item\s+-LiteralPath\s+\$Path\s+-Destination') {
+    $Failures += 'Local -Path installs must copy the explicitly supplied package.'
+}
 
 if ($Failures.Count -gt 0) {
     $Failures | ForEach-Object { Write-Error $_ }
     exit 1
 }
 
-Write-Host 'Installer semantics validated: Manual, stopped, ConnectionInfo preserved.'
+Write-Host 'Installer semantics validated: Manual, stopped, ConnectionInfo preserved, local package path supported.'
